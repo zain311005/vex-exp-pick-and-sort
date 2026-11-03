@@ -1,0 +1,3 @@
+# Laptop only. The robot program on the Brain needs none of these.
+pytest>=7
+matplotlib>=3.5

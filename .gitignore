@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Pictures from python3 sim/run_sim.py --plot
+sim/out/
+
+# Keep videos, reports and downloaded PDFs (such as VEX build instructions)
+# out of the repository. Link to VEX documents instead of copying them.
+*.MOV
+*.mov
+*.mp4
+*.docx
+*.pdf
+
+# macOS
+.DS_Store
