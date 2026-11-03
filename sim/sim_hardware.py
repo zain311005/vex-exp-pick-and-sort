@@ -358,6 +358,8 @@ class SimHardware:
             best += self.rng.gauss(0.0, self.sensor_noise_mm)
         return max(DISTANCE_MIN_MM, best)
 
+    # STUB until milestone 2: the simulator has no ball colours yet, so the
+    # Optical Sensor always reports nothing in front of it.
     def optical_hue(self):
         return 0.0
 
