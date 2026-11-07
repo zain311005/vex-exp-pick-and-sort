@@ -1,3 +1,5 @@
 # Laptop only. The robot program on the Brain needs none of these.
 pytest>=7
 matplotlib>=3.5
+reportlab>=4      # only for tools/build_guide.py
+svglib>=1.5       # only for tools/build_guide.py

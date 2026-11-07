@@ -18,7 +18,8 @@ is set to `RUN_MODE = "sensor_check"`, which never moves a motor.
 
 ## Changing a setting
 
-Each step changes `RUN_MODE` (and in step 3, `SELECTED_PATH`). Either:
+Each step changes `RUN_MODE`, and steps 3 and 4 also choose a path
+(`SELECTED_PATH` or `SORT_PATH`). Either:
 
 - change it in `config/settings.py`, run `python3 tools/build_brain.py` and
   paste the new `brain/clawbot.py` into VEXcode (this keeps the repository

@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="830" viewBox="0 0 900 830">
+<rect x="0" y="0" width="900" height="830" fill="#ffffff"/>
+<text x="30" y="36" font-family="Helvetica, Arial, sans-serif" font-size="18" text-anchor="start" fill="#222222" font-weight="bold">The sort, state by state (RUN_MODE "sort")</text>
+<rect x="250" y="54" width="400" height="50" rx="6" fill="#f2f2f2" stroke="#333333" stroke-width="1.5"/>
+<text x="450" y="74" font-family="Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" fill="#222222">Start: calibrate the gyro, wait for CHECK,</text>
+<text x="450" y="90.9" font-family="Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" fill="#222222">home the arm and the claw</text>
+<rect x="330" y="130" width="240" height="48" rx="6" fill="#dce9f5" stroke="#2b5d8a" stroke-width="1.5"/>
+<text x="450" y="160" font-family="Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle" fill="#222222" font-weight="bold">FOLLOW_PATH</text>
+<rect x="330" y="222" width="240" height="48" rx="6" fill="#dce9f5" stroke="#2b5d8a" stroke-width="1.5"/>
+<text x="450" y="252" font-family="Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle" fill="#222222" font-weight="bold">APPROACH</text>
+<rect x="330" y="314" width="240" height="48" rx="6" fill="#dce9f5" stroke="#2b5d8a" stroke-width="1.5"/>
+<text x="450" y="344" font-family="Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle" fill="#222222" font-weight="bold">GRAB</text>
+<rect x="330" y="406" width="240" height="48" rx="6" fill="#dce9f5" stroke="#2b5d8a" stroke-width="1.5"/>
+<text x="450" y="436" font-family="Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle" fill="#222222" font-weight="bold">CLASSIFY</text>
+<rect x="330" y="498" width="240" height="48" rx="6" fill="#dce9f5" stroke="#2b5d8a" stroke-width="1.5"/>
+<text x="450" y="528" font-family="Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle" fill="#222222" font-weight="bold">GO_TO_BOX</text>
+<rect x="330" y="590" width="240" height="48" rx="6" fill="#dce9f5" stroke="#2b5d8a" stroke-width="1.5"/>
+<text x="450" y="620" font-family="Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle" fill="#222222" font-weight="bold">RELEASE</text>
+<rect x="330" y="682" width="240" height="48" rx="6" fill="#dce9f5" stroke="#2b5d8a" stroke-width="1.5"/>
+<text x="450" y="712" font-family="Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle" fill="#222222" font-weight="bold">RETURN</text>
+<path d="M 450.0 104.0 L 450.0 121.0" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="450.0,130.0 445.5,121.0 454.5,121.0" fill="#333333"/>
+<path d="M 450.0 178.0 L 450.0 213.0" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="450.0,222.0 445.5,213.0 454.5,213.0" fill="#333333"/>
+<text x="462" y="196" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">ball seen on the board</text>
+<path d="M 450.0 270.0 L 450.0 305.0" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="450.0,314.0 445.5,305.0 454.5,305.0" fill="#333333"/>
+<text x="462" y="288" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">ball in the claw</text>
+<path d="M 450.0 362.0 L 450.0 397.0" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="450.0,406.0 445.5,397.0 454.5,397.0" fill="#333333"/>
+<text x="462" y="380" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">holding it</text>
+<path d="M 450.0 454.0 L 450.0 489.0" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="450.0,498.0 445.5,489.0 454.5,489.0" fill="#333333"/>
+<text x="462" y="472" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">known colour: its box</text>
+<text x="462" y="487.6" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">unknown: the reject spot</text>
+<path d="M 450.0 546.0 L 450.0 581.0" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="450.0,590.0 445.5,581.0 454.5,581.0" fill="#333333"/>
+<text x="462" y="564" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">ball over the box</text>
+<path d="M 450.0 638.0 L 450.0 673.0" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="450.0,682.0 445.5,673.0 454.5,673.0" fill="#333333"/>
+<text x="462" y="656" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">claw empty</text>
+<path d="M 330.0 706.0 L 296.0 706.0 L 296.0 154.0 L 321.0 154.0" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="330.0,154.0 321.0,158.5 321.0,149.5" fill="#333333"/>
+<text x="288" y="666" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222222">back on</text>
+<text x="288" y="681.6" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222222">the path</text>
+<rect x="650" y="130" width="210" height="48" rx="6" fill="#e8f4e8" stroke="#3c763d" stroke-width="1.5"/>
+<text x="755" y="150" font-family="Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" fill="#222222" font-weight="bold">SORT DONE</text>
+<text x="755" y="166.9" font-family="Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" fill="#222222">path finished</text>
+<path d="M 570.0 154.0 L 641.0 154.0" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="650.0,154.0 641.0,158.5 641.0,149.5" fill="#333333"/>
+<rect x="650" y="226" width="210" height="112" rx="6" fill="#fff6e5" stroke="#a66b00" stroke-width="1.5"/>
+<text x="664" y="248" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222" font-weight="bold">Give up on this spot</text>
+<text x="664" y="263.6" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">lost, too far, never in</text>
+<text x="664" y="279.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">the claw, or grip failed</text>
+<text x="664" y="294.8" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">twice. Ignore it from now</text>
+<text x="664" y="310.4" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">on and go back to the path</text>
+<path d="M 570.0 246.0 L 641.1 254.9" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="650.0,256.0 640.5,259.3 641.6,250.4" fill="#333333"/>
+<path d="M 570.0 338.0 L 641.3 318.4" fill="none" stroke="#333333" stroke-width="1.5"/>
+<polygon points="650.0,316.0 642.5,322.7 640.1,314.0" fill="#333333"/>
+<path d="M 860.0 282.0 L 884.0 282.0 L 884.0 706.0 L 579.0 706.0" fill="none" stroke="#333333" stroke-width="1.5" stroke-dasharray="6 4"/>
+<polygon points="570.0,706.0 579.0,701.5 579.0,710.5" fill="#333333"/>
+<rect x="650" y="480" width="210" height="112" rx="6" fill="#fbeaea" stroke="#a94442" stroke-width="1.5"/>
+<text x="664" y="502" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222" font-weight="bold">SORT STOPPED</text>
+<text x="664" y="517.6" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">a time limit ran out, a</text>
+<text x="664" y="533.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">drive was stuck, or a ball</text>
+<text x="664" y="548.8" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">stuck in the claw: every</text>
+<text x="664" y="564.4" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">motor stops, screen says why</text>
+<path d="M 570.0 522.0 L 641.2 538.0" fill="none" stroke="#333333" stroke-width="1.5" stroke-dasharray="6 4"/>
+<polygon points="650.0,540.0 640.2,542.4 642.2,533.6" fill="#333333"/>
+<text x="664" y="612" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">(from any state)</text>
+<rect x="20" y="304" width="240" height="112" rx="6" fill="#fff6e5" stroke="#a66b00" stroke-width="1.5"/>
+<text x="34" y="326" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222" font-weight="bold">Something in the way</text>
+<text x="34" y="341.6" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">nearer than 150 mm and</text>
+<text x="34" y="357.2" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">not a ball to fetch: stop,</text>
+<text x="34" y="372.8" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">ask for it to be cleared,</text>
+<text x="34" y="388.4" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">carry on after CHECK</text>
+<path d="M 330.0 170.0 L 206.3 297.5" fill="none" stroke="#333333" stroke-width="1.5" stroke-dasharray="6 4"/>
+<polygon points="200.0,304.0 203.0,294.4 209.5,300.7" fill="#333333"/>
+<text x="34" y="436" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">(also on the way to a</text>
+<text x="34" y="451.6" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" fill="#222222">box and back)</text>
+<text x="450" y="806" font-family="Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" fill="#222222" font-weight="bold">Left or Right button on the Brain: everything stops, from any state.</text>
+</svg>

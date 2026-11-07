@@ -69,7 +69,7 @@ What the status words mean:
 | What `loadfile` does when the file is missing | VERIFY | Not on the page. The code treats an error or an empty file as "no calibration" |
 | The Brain screen fits five lines of about 16 characters | VERIFY | The assignment program's screen used five lines of up to 16 characters |
 | Motor calls in `src/hardware.py` | From VEX | Motor page [8] |
-| Screen and `wait` calls | VERIFY | Used as on the API pages during the audit. Links get added in milestone 4 |
+| Screen, Sound, `wait` and timer calls | From VEX | Screen [9], Sound [10], Control [11] and Timer [12] pages |
 
 ## Sensing
 
@@ -165,8 +165,7 @@ These describe the simulator's model, not the robot. They live in
 
 ## Links
 
-1. EXP Clawbot build instructions, rev 3:
-   <https://content.vexrobotics.com/vexexp/pdf/builds/exp-clawbot-rev3.pdf>
+1. EXP Clawbot build instructions, rev 3: <https://link.vex.com/exp/builds/clawbot>
    (listed on <https://www.vexrobotics.com/exp/downloads/build-instructions>)
 2. MicroPython Libraries: <https://api.vex.com/exp/home/python/Micropython_libraries.html>
 3. Brain (buttons): <https://api.vex.com/exp/home/python/Sensing/Brain.html>
@@ -175,5 +174,10 @@ These describe the simulator's model, not the robot. They live in
 6. Optical Sensor: <https://api.vex.com/exp/home/python/Sensing/optical-sensor.html>
 7. SD Card: <https://api.vex.com/exp/home/python/SDcard.html>
 8. Motor: <https://api.vex.com/exp/home/python/Motion/motor_and_motor_group.html>
+9. Screen: <https://api.vex.com/exp/home/python/Screen.html>
+10. Sound: <https://api.vex.com/exp/home/python/Sound.html>
+11. Control (`wait`): <https://api.vex.com/exp/home/python/Logic/Control.html>
+12. Timer: <https://api.vex.com/exp/home/python/Logic/Timer.html>
 
 The VEX documents are linked, not copied into this repository.
+[REFERENCES.md](REFERENCES.md) lists every VEX page the project uses.

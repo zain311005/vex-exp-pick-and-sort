@@ -55,13 +55,13 @@ BOARD_MAX_Y = 1500.0
 
 BALL_DIAMETER_MM = 150.0  # the balls being sorted are about 15 cm across
 BOX_SIZE_MM = 254.0       # the boxes are 10 in by 10 in
+COLOURS = ["red", "green", "blue"]   # the ball colours; each one has a box below
 
 # Box centres in mm. The original path uses almost the whole board, so the
 # boxes sit off its edges: the colour boxes to the east, the reject spot to
 # the south. Move them to suit your room. tests/test_paths.py checks that the
 # robot outline on every path stays BOX_CLEARANCE_MM away from every box,
 # including while the claw swings round in a turn.
-COLOURS = ["red", "green", "blue"]
 BOX_POSITIONS = {
     "red": (1550.0, 1200.0),
     "green": (1550.0, 600.0),
