@@ -40,6 +40,8 @@ FRONT_MM = 330.0          # MEASURE: turning centre to the claw tips
 REAR_MM = 80.0            # MEASURE: turning centre to the back of the robot
 ROBOT_WIDTH_MM = 290.0    # MEASURE: widest point
 SENSOR_OFFSET_MM = 200.0  # MEASURE: turning centre to the Distance Sensor face
+CHASSIS_FRONT_MM = 200.0  # MEASURE: turning centre to the front of the chassis, under the claw
+CLAW_PALM_MM = 230.0      # MEASURE: turning centre to the back of the claw's opening
 
 
 # -------------------------------------------------------------- The field
@@ -56,16 +58,16 @@ BOX_SIZE_MM = 254.0       # the boxes are 10 in by 10 in
 
 # Box centres in mm. The original path uses almost the whole board, so the
 # boxes sit off its edges: the colour boxes to the east, the reject spot to
-# the west. Move them to suit your room. tests/test_paths.py checks that the
-# robot outline on the original path stays BOX_CLEARANCE_MM away from every
-# box, including while the claw swings round in a turn.
+# the south. Move them to suit your room. tests/test_paths.py checks that the
+# robot outline on every path stays BOX_CLEARANCE_MM away from every box,
+# including while the claw swings round in a turn.
 COLOURS = ["red", "green", "blue"]
 BOX_POSITIONS = {
     "red": (1550.0, 1200.0),
     "green": (1550.0, 600.0),
     "blue": (1550.0, 0.0),
 }
-REJECT_POSITION = (-600.0, 600.0)  # where a ball of unknown colour is left
+REJECT_POSITION = (450.0, -650.0)  # where a ball of unknown colour is left
 BOX_CLEARANCE_MM = 100.0
 
 
@@ -91,9 +93,18 @@ ORIGINAL_FINAL_HEADING = 0.0
 # A negative d drives backwards.
 SEGMENT_PATHS = {
     "bringup_line": [("drive", 300), ("turn", 180), ("drive", 300), ("turn", 0)],
+    # A loop round the board for sorting: north up line A, east along row 6,
+    # south down column D and back west. Put the balls on the west and north
+    # sides, on the line, at least 450 mm from a corner. Keep the east and
+    # south sides clear: the robot crosses them on its way to the boxes.
+    # It only sees straight ahead, so a ball beside its path is not seen,
+    # and one within about 22 cm of where it drives can be clipped.
+    "sort_loop": [("drive", 1500), ("turn", 90), ("drive", 900), ("turn", 180),
+                  ("drive", 1500), ("turn", 270), ("drive", 900), ("turn", 0)],
 }
 
-SELECTED_PATH = "original"
+SELECTED_PATH = "original"    # the path RUN_MODE "path" drives
+SORT_PATH = "sort_loop"       # the path RUN_MODE "sort" searches along
 
 
 # --------------------------------------------------------------- Run mode
@@ -105,7 +116,9 @@ SELECTED_PATH = "original"
 #                       with each ball in turn, then save the colour references
 #   "motor_check"       after CHECK, spin each motor slowly, one at a time
 #   "path"              after CHECK, drive SELECTED_PATH
-RUN_MODE = "path"
+#   "sort"              after CHECK, search along SELECTED_PATH and sort the balls
+# The default is "sensor_check", so a fresh copy never drives off by itself.
+RUN_MODE = "sensor_check"
 
 START_DELAY_MS = 1000     # pause after CHECK so your hand is clear of the robot
 
@@ -130,6 +143,8 @@ TURN_TOLERANCE_DEG = 1.5
 TURN_SETTLE_LOOPS = 4     # loops in a row inside the tolerance before a turn ends
 
 STOP_SETTLE_MS = 150      # time allowed for the robot to come to rest
+DRIVE_STALL_MM = 5.0      # a drive that moves less than this ...
+DRIVE_STALL_MS = 500      # ... in this long is stuck against something, so it stops
 
 MOTOR_CHECK_PCT = 20.0    # power for each motor in the motor check
 MOTOR_CHECK_MS = 1000     # how long each motor spins in the motor check
@@ -143,6 +158,13 @@ TURN_TIMEOUT_MS = 6000
 DRIVE_TIMEOUT_BASE_MS = 2000
 DRIVE_TIMEOUT_MS_PER_MM = 15
 SENSOR_CHECK_TIMEOUT_MS = 300000  # the sensor check ends after 5 minutes
+HOME_TIMEOUT_MS = 4000
+ARM_TIMEOUT_MS = 4000
+CLAW_TIMEOUT_MS = 2500
+APPROACH_TIMEOUT_MS = 10000
+CREEP_TIMEOUT_MS = 6000
+BLOCKED_TIMEOUT_MS = 120000   # how long "clear the way" waits for CHECK
+MISSION_TIMEOUT_MS = 900000   # a whole sort may take at most 15 minutes
 
 
 # ---------------------------------------------------------------- Sensors
@@ -185,6 +207,56 @@ COLOUR_MIN_TOLERANCE_DEG = 8.0
 COLOUR_MAX_TOLERANCE_DEG = 30.0
 COLOUR_FILE = "colours.txt"          # the calibration, in the SD card's root folder
 COLOUR_LOG_FILE = "colour_log.csv"   # every calibration reading, for tools/fit_colours.py
+
+
+# ----------------------------------------------------------- Arm and claw
+# Positions are motor degrees, counted from where the arm and claw stop when
+# they are homed at the start of a sort: the arm all the way down and the
+# claw wide open. The arm motor drives a 12 tooth gear into the 60 tooth gear
+# on the arm (EXP Clawbot build instructions), so 5 motor degrees lift the
+# arm about 1 degree. The sensor check shows both positions while you move
+# them by hand, which is how to find your values.
+ARM_SEARCH_DEG = 0.0      # MEASURE: arm while looking for balls (claw down and open)
+ARM_GRAB_DEG = 0.0        # MEASURE: arm when the claw closes on a ball
+ARM_CARRY_DEG = 150.0     # MEASURE: ball clear of the floor and of the Distance Sensor
+ARM_DROP_DEG = 400.0      # MEASURE: bottom of the ball above the box rim
+ARM_KP = 0.5              # percent per degree of arm error
+ARM_MAX_PCT = 40.0
+ARM_MIN_PCT = 8.0         # MEASURE: lowest power that still moves the arm
+ARM_TOLERANCE_DEG = 10.0
+ARM_HOME_PCT = 15.0       # gentle push down onto the arm's lowest point
+CLAW_HOME_PCT = 15.0      # gentle push open onto the claw's open stop
+CLAW_CLOSE_PCT = 25.0     # grip power; the claw stops when it meets the ball
+CLAW_OPEN_PCT = 25.0
+CLAW_EMPTY_CLOSED_DEG = 120.0  # MEASURE: where the claw stops when it closes on nothing
+CLAW_GRIP_MARGIN_DEG = 20.0    # stopping this far short of that means a ball is held
+STALL_DEG = 3.0           # a motor that turns less than this ...
+STALL_MS = 300            # ... in this long has reached a stop
+
+
+# ---------------------------------------------------------------- Sorting
+# RUN_MODE "sort". src/mission.py describes the states and what happens when
+# something goes wrong. The robot searches along SELECTED_PATH.
+APPROACH_PCT = 15.0       # slow drive up to a ball
+APPROACH_STOP_MM = 100.0  # stop when the ball is this close to the Distance Sensor
+APPROACH_MAX_MM = 700.0   # give up if the ball is not reached within this distance
+OBJECT_LOST_MS = 1000     # no valid distance for this long means the object has gone
+CREEP_PCT = 8.0           # then creep forward until the Optical Sensor sees the ball
+CREEP_MAX_MM = 150.0
+IN_CLAW_READS = 3         # bright readings in a row that mean the ball is in the claw
+GRAB_TRIES = 2
+GRAB_RETRY_BACKUP_MM = 100.0
+OBSTACLE_STOP_MM = 150.0  # anything this close that is not a ball to fetch stops the robot
+IGNORE_RADIUS_MM = 200.0  # after giving up on an object, ignore anything this near it
+BOARD_MARGIN_MM = 0.0     # an object only counts as a ball if it is on the board
+UNKNOWN_COLOUR_ACTION = "reject"  # "reject": take it to REJECT_POSITION; "stop": stop there
+BOX_STAGING_MM = 400.0    # line up this far back from the drop point, and back out to it
+DROP_REACH_MM = 310.0     # MEASURE: turning centre to the held ball's centre, arm at ARM_DROP_DEG
+DROP_INSET_MM = 90.0      # put the ball's centre this far inside the box's near edge
+RELEASE_WAIT_MS = 800
+RELEASE_TRIES = 2
+NAV_TRIES = 3             # times to ask for the way to be cleared before giving up
+ARRIVE_TOLERANCE_MM = 30.0  # this near a point counts as being there already
 
 
 # ------------------------------------------------------------ Brain screen

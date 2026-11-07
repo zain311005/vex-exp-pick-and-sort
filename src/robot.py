@@ -10,7 +10,7 @@
 # robot to be a little off after a long path.
 
 from settings import *
-from geometry import clamp, wrap_180, wrap_360, compass_vector
+from geometry import clamp, compass_vector, wrap_180, wrap_360
 
 
 class StopRequested(Exception):
@@ -27,7 +27,9 @@ class Robot:
         self.last_wheel_mm = 0.0
         self.lines = []
         self.last_screen_ms = None
+        self.screen_source = None   # if set, called for fresh lines at each redraw
         self.last_found = None
+        self.last_driven_mm = 0.0
 
     # ---------------------------------------------------- position tracking
     def wheel_mm(self):
@@ -82,6 +84,8 @@ class Robot:
         now = self.hw.time_ms()
         if force or self.last_screen_ms is None or now - self.last_screen_ms >= SCREEN_PERIOD_MS:
             self.last_screen_ms = now
+            if self.screen_source is not None:
+                self.lines = list(self.screen_source())[:SCREEN_ROWS]
             self.hw.show(self.lines)
 
     # ------------------------------------------------------- start and stop
@@ -165,7 +169,11 @@ class Robot:
         with the distance still to go. If it returns anything other than
         None the robot stops and drive returns ("object", that value).
 
-        Returns ("done", None), ("timeout", None) or ("object", value).
+        If the wheels move less than DRIVE_STALL_MM in DRIVE_STALL_MS the
+        robot is pushing against something, so it stops and says "stuck".
+
+        Returns ("done", None), ("timeout", None), ("stuck", None) or
+        ("object", value). Afterwards last_driven_mm says how far it went.
         """
         if distance_mm >= 0:
             direction = 1.0
@@ -176,18 +184,31 @@ class Robot:
         start = self.hw.time_ms()
         limit = DRIVE_TIMEOUT_BASE_MS + target * DRIVE_TIMEOUT_MS_PER_MM
         speed = 0.0
+        stall_ms = start
+        stall_mm = start_mm
         while True:
             remaining = target - (self.wheel_mm() - start_mm) * direction
             if remaining <= DRIVE_TOLERANCE_MM:
                 self.stop_drive()
+                self.last_driven_mm = (self.wheel_mm() - start_mm) * direction
                 return ("done", None)
-            if self.hw.time_ms() - start > limit:
+            now = self.hw.time_ms()
+            if now - start > limit:
                 self.stop_drive()
+                self.last_driven_mm = (self.wheel_mm() - start_mm) * direction
                 return ("timeout", None)
+            if now - stall_ms >= DRIVE_STALL_MS:
+                if abs(self.wheel_mm() - stall_mm) < DRIVE_STALL_MM:
+                    self.stop_drive()
+                    self.last_driven_mm = (self.wheel_mm() - start_mm) * direction
+                    return ("stuck", None)
+                stall_ms = now
+                stall_mm = self.wheel_mm()
             if watch is not None and direction > 0:
                 found = watch(remaining)
                 if found is not None:
                     self.stop_drive()
+                    self.last_driven_mm = (self.wheel_mm() - start_mm) * direction
                     return ("object", found)
             want = clamp(DRIVE_MIN_PCT + DRIVE_KP * remaining, DRIVE_MIN_PCT, DRIVE_MAX_PCT)
             if want < speed:
@@ -199,12 +220,47 @@ class Robot:
             self.hw.drive(direction * speed + steer, direction * speed - steer)
             self.tick()
 
+    def drive_until(self, pct, heading, check, max_mm, timeout_ms):
+        """Drive straight at a steady pct power along heading until check()
+        returns something other than None. Negative pct drives backwards.
+
+        Returns what check() returned, or "too_far" after max_mm,
+        "timeout" after timeout_ms, or "stuck" if the wheels stop moving as
+        in drive(). The robot is stopped either way.
+        """
+        start_mm = self.wheel_mm()
+        start = self.hw.time_ms()
+        stall_ms = start
+        stall_mm = start_mm
+        while True:
+            outcome = check()
+            if outcome is not None:
+                self.stop_drive()
+                return outcome
+            if abs(self.wheel_mm() - start_mm) >= max_mm:
+                self.stop_drive()
+                return "too_far"
+            now = self.hw.time_ms()
+            if now - start > timeout_ms:
+                self.stop_drive()
+                return "timeout"
+            if now - stall_ms >= DRIVE_STALL_MS:
+                if abs(self.wheel_mm() - stall_mm) < DRIVE_STALL_MM:
+                    self.stop_drive()
+                    return "stuck"
+                stall_ms = now
+                stall_mm = self.wheel_mm()
+            steer = clamp(STEER_KP * wrap_180(heading - self.hw.heading()),
+                          -STEER_MAX_PCT, STEER_MAX_PCT)
+            self.hw.drive(pct + steer, pct - steer)
+            self.tick()
+
     def follow_segments(self, segments, watch=None, first=0):
         """Run segments in order, starting at index first.
 
-        Returns (result, index): result is "done", "timeout" or "object",
-        index is the segment that ended the run (len(segments) when done).
-        For "object" the found value is kept in self.last_found.
+        Returns (result, index): result is "done", "timeout", "stuck" or
+        "object", index is the segment that ended the run (len(segments)
+        when done). For "object" the found value is kept in self.last_found.
         """
         self.last_found = None
         index = first
@@ -219,11 +275,11 @@ class Robot:
                     return ("timeout", index)
             elif kind == "drive":
                 result, found = self.drive(value, self.target_heading, watch)
-                if result == "timeout":
-                    return ("timeout", index)
                 if result == "object":
                     self.last_found = found
                     return ("object", index)
+                if result != "done":
+                    return (result, index)
             else:
                 raise ValueError("unknown segment type: %s" % kind)
             index += 1

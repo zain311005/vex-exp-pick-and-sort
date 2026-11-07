@@ -30,6 +30,10 @@ def test_default_speeds_are_slow():
     assert MOTOR_CHECK_PCT <= 25
     assert DRIVE_MIN_PCT < DRIVE_MAX_PCT
     assert TURN_MIN_PCT < TURN_MAX_PCT
+    assert ARM_MAX_PCT <= 50 and ARM_MIN_PCT < ARM_MAX_PCT
+    assert CLAW_CLOSE_PCT <= 40 and CLAW_OPEN_PCT <= 40
+    assert ARM_HOME_PCT <= 20 and CLAW_HOME_PCT <= 20
+    assert CREEP_PCT <= APPROACH_PCT <= DRIVE_MAX_PCT
 
 
 def test_every_timeout_is_positive():
@@ -42,6 +46,24 @@ def test_every_timeout_is_positive():
 def test_selected_mode_and_path_exist():
     assert RUN_MODE in MODES
     assert SELECTED_PATH in path_names()
+    assert SORT_PATH in path_names()
+    assert UNKNOWN_COLOUR_ACTION in ("reject", "stop")
+
+
+def test_claw_and_arm_settings_make_sense():
+    # front to back along the robot: sensor, palm, claw tips
+    assert SENSOR_OFFSET_MM <= CLAW_PALM_MM < FRONT_MM
+    assert CHASSIS_FRONT_MM <= CLAW_PALM_MM
+    assert 0 <= ARM_SEARCH_DEG <= ARM_CARRY_DEG < ARM_DROP_DEG
+    assert 0 <= ARM_GRAB_DEG < ARM_CARRY_DEG
+    assert 0 < CLAW_GRIP_MARGIN_DEG < CLAW_EMPTY_CLOSED_DEG
+    # the ball fits inside a box at the drop point
+    assert BALL_DIAMETER_MM / 2.0 <= DROP_INSET_MM <= BOX_SIZE_MM - BALL_DIAMETER_MM / 2.0
+    # the chassis stays out of the box while the ball is over it
+    assert DROP_REACH_MM - DROP_INSET_MM > CHASSIS_FRONT_MM
+    # the approach stops before the claw would push the ball away
+    assert APPROACH_STOP_MM < OBJECT_RANGE_MM
+    assert OBSTACLE_STOP_MM < OBJECT_RANGE_MM
 
 
 def test_colour_settings_make_sense():
@@ -88,9 +110,10 @@ def test_src_has_no_tuning_numbers():
     """Tuning values belong in config/settings.py.
 
     Code in src/ may only use numbers that are part of the maths: 0, 1 and 2,
-    180 and 360 for angles, and 1000 for milliseconds per second.
+    90, 180, 270 and 360 for compass directions and turns, and 1000 for
+    milliseconds per second.
     """
-    allowed = {0, 1, 2, 180, 360, 1000}
+    allowed = {0, 1, 2, 90, 180, 270, 360, 1000}
     for path in sorted(glob.glob(os.path.join(ROOT, "src", "*.py"))):
         with open(path) as handle:
             tree = ast.parse(handle.read())

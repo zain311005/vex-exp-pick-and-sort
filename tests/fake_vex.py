@@ -223,6 +223,7 @@ class Motor:
         self.port = port
         self.reverse = reverse
         self.command = 0.0
+        self.peak = 0.0       # the most power it was ever asked for
         self.stopping = None
         self._degrees = 0.0
 
@@ -232,6 +233,7 @@ class Motor:
         if not -100.0 <= velocity <= 100.0:
             raise ValueError("velocity %r is outside -100..100 percent" % velocity)
         self.command = velocity if direction is FORWARD else -velocity
+        self.peak = max(self.peak, abs(velocity))
 
     def stop(self):
         self.command = 0.0

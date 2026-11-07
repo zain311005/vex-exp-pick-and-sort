@@ -3,28 +3,35 @@
 # What runs when the program starts on the Brain. run() takes any hardware
 # object, so the simulator and the tests call it with SimHardware instead.
 #
-# Calibrate the gyro, then do RUN_MODE (see settings.py). Milestone 2 added
-# the colour calibration. The pick-and-sort behaviour comes in milestone 3.
+# Calibrate the gyro, then do RUN_MODE (see settings.py): a bring-up check,
+# the colour calibration, a plain drive along a path, or the sort itself.
 
 from settings import *
 from hardware import VexHardware
 from robot import Robot, StopRequested
 from paths import get_path
-from colour import colour_calibrate
+from colour import colour_calibrate, load_colour_calibration
 from bringup import sensor_check, motor_check
+from mission import Mission, on_board
 
-MODES = ["sensor_check", "colour_calibrate", "motor_check", "path"]
+MODES = ["sensor_check", "colour_calibrate", "motor_check", "path", "sort"]
 
 
 def settings_problem(mode, path_name):
     """A short message if the settings cannot run, otherwise None."""
     if mode not in MODES:
         return "Bad RUN_MODE"
-    if mode == "path":
+    if mode == "path" or mode == "sort":
         try:
             get_path(path_name)
         except ValueError:
             return "Bad path setting"
+    if mode == "sort":
+        if UNKNOWN_COLOUR_ACTION != "reject" and UNKNOWN_COLOUR_ACTION != "stop":
+            return "Bad unknown rule"
+        for spot in list(BOX_POSITIONS.values()) + [REJECT_POSITION]:
+            if on_board(spot[0], spot[1], -BOX_SIZE_MM / 2.0):
+                return "Box on the board"
     return None
 
 
@@ -48,8 +55,26 @@ def run_path(robot, path_name):
     return result
 
 
-def run(hw, mode=RUN_MODE, path_name=SELECTED_PATH):
-    """Run the program on the given hardware. Returns a short result word."""
+def run_sort(robot, path_name, references, gate):
+    """Search the path and sort the balls. Returns "done" or "failed"."""
+    hw = robot.hw
+    hw.optical_light(OPTICAL_LIGHT_PCT)
+    robot.reset_pose(START_X, START_Y, START_HEADING)
+    result = Mission(robot, references, gate, path_name).run()
+    hw.optical_light(0)
+    return result
+
+
+def run(hw, mode=RUN_MODE, path_name=None):
+    """Run the program on the given hardware. Returns a short result word.
+
+    path_name defaults to SORT_PATH for the sort and SELECTED_PATH otherwise.
+    """
+    if path_name is None:
+        if mode == "sort":
+            path_name = SORT_PATH
+        else:
+            path_name = SELECTED_PATH
     robot = Robot(hw)
     problem = settings_problem(mode, path_name)
     if problem is not None:
@@ -66,17 +91,24 @@ def run(hw, mode=RUN_MODE, path_name=SELECTED_PATH):
         if mode == "colour_calibrate":
             return colour_calibrate(robot)
 
+        lines = ["Clawbot sorter"]
         if mode == "motor_check":
-            hint = "Lift wheels!"
+            lines.append("Lift wheels!")
+        elif mode == "sort":
+            references, gate, source = load_colour_calibration(hw)
+            lines.append("Sort " + path_name)
+            lines.append("Colours " + source)
         else:
-            hint = "Path " + path_name
-        robot.set_lines(["Clawbot sorter", hint, "CHECK = start", "L/R = stop"])
+            lines.append("Path " + path_name)
+        robot.set_lines(lines + ["CHECK = start", "L/R = stop"])
         if not robot.wait_for_check(START_WAIT_TIMEOUT_MS):
             robot.set_lines(["Not started.", "Program ended."])
             return "no_start"
         robot.pause(START_DELAY_MS)
         if mode == "motor_check":
             return motor_check(robot)
+        if mode == "sort":
+            return run_sort(robot, path_name, references, gate)
         return run_path(robot, path_name)
     except StopRequested:
         hw.stop_all()

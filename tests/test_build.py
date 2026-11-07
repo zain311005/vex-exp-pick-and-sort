@@ -10,25 +10,26 @@ from settings import *
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BRAIN_FILE = build_brain.OUTPUT
-
-shipped_defaults = pytest.mark.skipif(
-    RUN_MODE != "path" or SELECTED_PATH != "original",
-    reason="checks the shipped settings: RUN_MODE 'path', SELECTED_PATH 'original'")
+BRAIN_FILES = [build_brain.OUTPUT, build_brain.COMPACT_OUTPUT]
+both_files = pytest.mark.parametrize("path", BRAIN_FILES, ids=["full", "compact"])
 
 
-def brain_source():
-    with open(BRAIN_FILE) as handle:
+def brain_source(path=BRAIN_FILE):
+    with open(path) as handle:
         return handle.read()
 
 
 # ---------------------------------------------------------------- build
-def test_brain_file_is_up_to_date():
-    assert build_brain.build() == brain_source(), "run: python3 tools/build_brain.py"
+def test_brain_files_are_up_to_date():
+    text = build_brain.build()
+    assert text == brain_source(build_brain.OUTPUT), "run: python3 tools/build_brain.py"
+    assert build_brain.compact(text) == brain_source(build_brain.COMPACT_OUTPUT)
 
 
-def test_brain_file_imports_only_vex_and_math():
+@both_files
+def test_brain_file_imports_only_vex_and_math(path):
     imported = set()
-    for node in ast.walk(ast.parse(brain_source())):
+    for node in ast.walk(ast.parse(brain_source(path))):
         if isinstance(node, ast.Import):
             imported.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
@@ -36,10 +37,11 @@ def test_brain_file_imports_only_vex_and_math():
     assert imported == {"vex", "math"}
 
 
-def test_brain_file_does_not_hide_the_vex_names_it_uses():
+@both_files
+def test_brain_file_does_not_hide_the_vex_names_it_uses(path):
     # everything ends up in one file after "from vex import *"
     defined = set()
-    for node in ast.parse(brain_source()).body:
+    for node in ast.parse(brain_source(path)).body:
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
             defined.add(node.name)
         elif isinstance(node, ast.Assign):
@@ -50,11 +52,24 @@ def test_brain_file_does_not_hide_the_vex_names_it_uses():
     assert not defined & set(fake_vex.__all__)
 
 
-def test_brain_file_and_sources_use_only_python_3_4_syntax():
-    assert build_brain.micropython_problems(brain_source()) == []
+@both_files
+def test_brain_file_uses_only_python_3_4_syntax(path):
+    assert build_brain.micropython_problems(brain_source(path)) == []
+
+
+def test_sources_use_only_python_3_4_syntax():
     for part in build_brain.PARTS:
         with open(os.path.join(ROOT, part)) as handle:
             assert build_brain.micropython_problems(handle.read(), part) == [], part
+
+
+def test_compact_file_is_smaller_and_has_no_docstrings():
+    full = brain_source(build_brain.OUTPUT)
+    small = brain_source(build_brain.COMPACT_OUTPUT)
+    assert len(small) < 0.8 * len(full)
+    for node in ast.walk(ast.parse(small)):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef)):
+            assert ast.get_docstring(node) is None
 
 
 @pytest.mark.parametrize("code", [
@@ -98,23 +113,23 @@ def test_build_refuses_imports_the_brain_does_not_have():
 
 
 # ------------------------------------- the Brain file on a fake vex module
-def run_brain_file(monkeypatch, **script):
-    """Run brain/clawbot.py on the fake vex module. Returns its names."""
+def run_brain_file(monkeypatch, path=BRAIN_FILE, **script):
+    """Run a Brain file, main() and all, on the fake vex module."""
     fake_vex.reset(**script)
     monkeypatch.setitem(sys.modules, "vex", fake_vex)
     names = {"__name__": "__main__"}
-    exec(compile(brain_source(), BRAIN_FILE, "exec"), names)
+    exec(compile(brain_source(path), path, "exec"), names)
     return names
 
 
-def brain_names(monkeypatch, **script):
-    """Load brain/clawbot.py on the fake vex module without running main()."""
+def brain_names(monkeypatch, path=BRAIN_FILE, **script):
+    """Load a Brain file on the fake vex module without running main()."""
     fake_vex.reset(**script)
     monkeypatch.setitem(sys.modules, "vex", fake_vex)
     names = {"__name__": "brain_without_main"}
-    source = brain_source()
+    source = brain_source(path)
     assert source.endswith("\nmain()\n")
-    exec(compile(source[:-len("main()\n")], BRAIN_FILE, "exec"), names)
+    exec(compile(source[:-len("main()\n")], path, "exec"), names)
     return names
 
 
@@ -128,7 +143,8 @@ def motors():
 
 
 def test_brain_file_sets_up_every_device_on_its_port(monkeypatch):
-    run_brain_file(monkeypatch)
+    names = brain_names(monkeypatch)
+    names["VexHardware"]()
     devices = fake_vex.state.devices
     expected = {
         LEFT_DRIVE_PORT: (fake_vex.Motor, LEFT_DRIVE_REVERSED, fake_vex.BRAKE),
@@ -145,12 +161,12 @@ def test_brain_file_sets_up_every_device_on_its_port(monkeypatch):
     assert isinstance(devices[OPTICAL_PORT], fake_vex.Optical)
 
 
-@pytest.mark.skipif(RUN_MODE == "sensor_check", reason="sensor_check does not wait for CHECK")
-def test_brain_file_ends_if_check_is_never_pressed(monkeypatch):
-    run_brain_file(monkeypatch)
-    assert screen() == ["Not started.", "Program ended."]
-    assert fake_vex.state.now_ms >= START_WAIT_TIMEOUT_MS
-    assert all(motor.command == 0 for motor in motors())
+@pytest.mark.skipif(RUN_MODE != "sensor_check", reason="the shipped RUN_MODE has been changed")
+def test_shipped_settings_never_move_a_motor(monkeypatch):
+    # a fresh copy runs the sensor check: CHECK does nothing, L/R stops it
+    run_brain_file(monkeypatch, check_press_ms=3000, left_press_ms=9000)
+    assert screen() == ["STOPPED", "Stop pressed"]
+    assert [motor.peak for motor in motors()] == [0.0, 0.0, 0.0, 0.0]
 
 
 @pytest.mark.parametrize("button", ["left_press_ms", "right_press_ms"])
@@ -161,13 +177,31 @@ def test_brain_file_stops_on_either_stop_button(monkeypatch, button):
     assert all(motor.command == 0 for motor in motors())
 
 
-@shipped_defaults
+def test_brain_file_ends_if_check_is_never_pressed(monkeypatch):
+    names = brain_names(monkeypatch)
+    assert names["run"](names["VexHardware"](), "path", "original") == "no_start"
+    assert screen() == ["Not started.", "Program ended."]
+    assert fake_vex.state.now_ms >= START_WAIT_TIMEOUT_MS
+    assert all(motor.peak == 0 for motor in motors())
+
+
 def test_brain_file_gives_up_when_the_wheels_never_turn(monkeypatch, capsys):
-    # the fake motors never move, so the first drive has to time out
-    run_brain_file(monkeypatch, check_press_ms=3000)
-    assert screen() == ["PATH STOPPED", "Reason: timeout", "At segment 2"]
+    # the fake motors never move, so the first drive finds itself stuck
+    names = brain_names(monkeypatch, check_press_ms=3000)
+    assert names["run"](names["VexHardware"](), "path", "original") == "stuck"
+    assert screen() == ["PATH STOPPED", "Reason: stuck", "At segment 2"]
     assert all(motor.command == 0 for motor in motors())
-    assert "path original timeout segment 1" in capsys.readouterr().out
+    assert "path original stuck segment 1" in capsys.readouterr().out
+
+
+@both_files
+def test_brain_file_sort_stops_when_the_wheels_never_turn(monkeypatch, path):
+    # homing passes (the fake arm and claw never move, so they count as
+    # stalled at once), then the first drive of the search path is stuck
+    names = brain_names(monkeypatch, path, check_press_ms=3000)
+    assert names["run"](names["VexHardware"](), "sort") == "failed"
+    assert screen()[:3] == ["SORT STOPPED", "drive blocked", "FOLLOW_PATH"]
+    assert all(motor.command == 0 for motor in motors())
 
 
 def calibration_view(now_ms):
@@ -196,7 +230,7 @@ def test_brain_file_colour_calibration_saves_to_the_sd_card(monkeypatch, capsys)
     assert log.startswith("label,hue,brightness\nempty,120.0,3.0\n")
 
 
-def test_brain_file_reads_the_calibration_back(monkeypatch, capsys):
+def test_brain_file_reads_the_calibration_back(monkeypatch):
     text = "gate 15.5\nred 5.0 8.0\ngreen 118.0 8.0\nblue 215.0 8.0\n"
     names = brain_names(monkeypatch, sd_inserted=True,
                         sd_files={COLOUR_FILE: text.encode("utf-8")})
@@ -204,13 +238,15 @@ def test_brain_file_reads_the_calibration_back(monkeypatch, capsys):
     assert source == "SD card" and gate == pytest.approx(15.5)
 
 
+@both_files
 @pytest.mark.parametrize("mode, script, result, first_line", [
     ("sensor_check", {"left_press_ms": 6000}, "stopped", "STOPPED"),
     ("motor_check", {"check_press_ms": 3000}, "done", "MOTOR CHECK DONE"),
     ("colour_calibrate", {"right_press_ms": 4000}, "stopped", "STOPPED"),
+    ("sort", {"check_press_ms": 3000, "left_press_ms": 4500}, "stopped", "STOPPED"),
 ])
-def test_brain_file_runs_every_mode(monkeypatch, mode, script, result, first_line):
-    names = brain_names(monkeypatch, **script)
+def test_brain_file_runs_every_mode(monkeypatch, path, mode, script, result, first_line):
+    names = brain_names(monkeypatch, path, **script)
     assert names["run"](names["VexHardware"](), mode) == result
     assert screen()[0] == first_line
     assert all(motor.command == 0 for motor in motors())

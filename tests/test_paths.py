@@ -100,8 +100,12 @@ def gap_between(a, b):
     return best
 
 
-def test_original_path_keeps_clear_of_every_box(original_run):
-    result, hw = original_run
+@pytest.mark.parametrize("name", path_names())
+def test_every_path_keeps_clear_of_every_box(name):
+    from main import run
+    from sim_hardware import SimHardware
+    hw = SimHardware()
+    assert run(hw, "path", name) == "done"
     boxes = []
     for cx, cy in list(BOX_POSITIONS.values()) + [REJECT_POSITION]:
         x0, y0, x1, y1 = rectangle(cx, cy, BOX_SIZE_MM, BOX_SIZE_MM)

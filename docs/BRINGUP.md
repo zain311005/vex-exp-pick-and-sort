@@ -5,8 +5,8 @@ This checklist is the order to try it in the first time, so that a wrong
 setting shows up while the robot cannot hurt itself or anyone.
 
 The order is: sensors alone, then motors with the wheels off the ground,
-then slow driving, then the full path. Do not skip ahead. Later milestones
-will add steps for the claw and the ball.
+then slow driving, then the full sequence. Do not skip ahead. A fresh copy
+is set to `RUN_MODE = "sensor_check"`, which never moves a motor.
 
 ## How to stop the robot
 
@@ -49,6 +49,8 @@ Setting: `RUN_MODE = "sensor_check"`.
 1. Put the robot on the board and start the program. Keep it still while
    the screen says "Calibrating gyro".
 2. The screen then shows:
+   - `Arm` and `Claw`: their positions in motor degrees, counted from where
+     they were when the program started
    - `Head`: the gyro heading
    - `Dist`: the filtered distance in mm, with `IN` instead of `mm` when
      something is within `OBJECT_RANGE_MM` (400 mm), or `none`
@@ -57,20 +59,48 @@ Setting: `RUN_MODE = "sensor_check"`.
      a colour, `none` (nothing in the claw) or `unknown`
 
 - [ ] The program starts at all. `brain/clawbot.py` is a big file (about
-      48 KB). [VERIFY] If VEXcode or the Brain reports a size or memory
-      error, write down the exact message.
+      80 KB). [VERIFY] If VEXcode or the Brain reports a size or memory
+      error, write down the exact message and try
+      `brain/clawbot_compact.py`, the same program without comments.
 - [ ] Turn the robot by hand about a quarter turn clockwise. The heading
       goes up by about 90.
 - [ ] Hold a hand about 300 mm in front of the Distance Sensor. It shows
       roughly `Dist 300 IN`. At about 600 mm it shows `Dist 600 mm`. Take
       the hand away and it shows `none` or a much bigger number.
 - [ ] Put a ball in the claw. Brightness goes up and the hue changes with
-      the ball's colour. Until step 1b is done the colour comes from the
+      the ball's colour. Until step 1c is done the colour comes from the
       VEX default hue ranges, so it may be wrong.
 - [ ] With the claw empty, `Colour` shows `none`.
+- [ ] With nothing in front of the robot, the arm down and the claw open,
+      `Dist` shows `none`. If it sees the claw, move the Distance Sensor or
+      raise `ARM_SEARCH_DEG` until it does not.
 - [ ] Press Left or Right. The screen shows STOPPED.
 
-### 1b. Colour calibration
+### 1b. Arm and claw positions
+
+Still `RUN_MODE = "sensor_check"`. Before starting the program, move the
+arm all the way down and open the claw fully by hand. Both then read 0.
+Move them slowly by hand and write down the `Arm` and `Claw` numbers for:
+
+- [ ] `ARM_GRAB_DEG`: the claw at the height to grip a ball on the floor
+      (usually 0)
+- [ ] `ARM_CARRY_DEG`: a held ball clear of the floor and out of the
+      Distance Sensor's view (`Dist` no longer sees it)
+- [ ] `ARM_DROP_DEG`: the bottom of a held ball above the rim of a box
+- [ ] `CLAW_EMPTY_CLOSED_DEG`: the claw closed with nothing in it
+- [ ] the `Claw` number with a ball held. It must be at least
+      `CLAW_GRIP_MARGIN_DEG` (20) below `CLAW_EMPTY_CLOSED_DEG`, or the
+      robot cannot tell a held ball from an empty claw
+- [ ] `DROP_REACH_MM`: with the arm at `ARM_DROP_DEG`, the distance along
+      the floor from the middle of the traction wheel axle to the middle
+      of the held ball
+
+Put these in `config/settings.py`. [VERIFY] The arm motor may be hard to
+turn by hand through its gears. If it will not move, keep the settings as
+they are for now: step 4b shows whether the grab, carry and drop heights
+work, and they can be changed from there.
+
+### 1c. Colour calibration
 
 Setting: `RUN_MODE = "colour_calibrate"`. Have the red, green and blue
 balls ready. The room light should be the same as when the robot will sort.
@@ -140,7 +170,9 @@ the way it started. Leave about 1 m of clear space around it.
 - [ ] If it drives a few percent too far or too short, measure the wheel
       and check `WHEEL_TRAVEL_MM`.
 
-## Step 4: the full path
+## Step 4: the full sequence
+
+### 4a. The whole path
 
 Settings: `RUN_MODE = "path"`, `SELECTED_PATH = "original"`.
 
@@ -152,6 +184,49 @@ towards row 6 (x 0 mm, y -150 mm in `config/settings.py`).
       Expect them to differ: dead reckoning drifts, and the robot cannot
       see its own error.
 - [ ] The claw never comes near the boxes.
+
+### 4b. Sort one ball
+
+Settings: `RUN_MODE = "sort"`, `SORT_PATH = "sort_loop"`. Put the boxes
+where `BOX_POSITIONS` and `REJECT_POSITION` say. Put one red ball on line
+A, 450 mm in front of the start point.
+
+1. Start the program, press CHECK, take your hand away. The screen says
+   whether the colours came from the SD card or from `settings.py`.
+2. The robot first homes the arm and claw: the arm goes gently down onto
+   its stop and the claw opens onto its stop.
+
+- [ ] It stops when it sees the ball, creeps up to it and closes the claw.
+- [ ] The screen shows `CLASSIFY`, then `Colour red`.
+- [ ] It drives to the line-up point in front of the red box, raises the
+      arm, moves in, and lets go. Check the ball really lands in the box.
+- [ ] It backs out, lowers the arm, goes back to where it saw the ball and
+      carries on round the loop.
+- [ ] At the end the screen shows `SORT DONE` and `R1 G0 B0 Rej 0`.
+
+### 4c. Sort all the balls
+
+Put one ball of each colour, and one ball of a colour you did not
+calibrate, on the west and north sides of the loop, on the line and at
+least 450 mm from a corner. Keep the east and south sides clear.
+
+- [ ] Each ball goes to its own box and the odd one goes to the reject spot.
+- [ ] Note any ball that lands beside a box instead of in it. The robot
+      cannot tell, so only you can check this.
+
+If the screen says `SORT STOPPED`, the second line says why:
+
+| Message | What to check |
+|---|---|
+| `arm not homed`, `claw not homed` | The motor did not reach its stop within the time: cable, port, or `*_REVERSED` |
+| `arm timed out`, `claw timed out` | A move did not finish: something in the way, or `ARM_MIN_PCT` too low |
+| `drive blocked` | The wheels stopped turning while driving: something is in the way |
+| `turn timed out`, `drive timed out` | A turn or drive took too long: low battery, or the gains need tuning |
+| `path blocked`, `way blocked` | Something was in the way and CHECK was not pressed after clearing it |
+| `unknown colour` | Only when `UNKNOWN_COLOUR_ACTION = "stop"` |
+| `box not reached` | The last move into the box did not finish: the chassis may have hit the box |
+| `ball stuck` | The ball stayed in the claw after it opened twice |
+| `took too long` | The whole sort passed `MISSION_TIMEOUT_MS` |
 
 ## Results log
 

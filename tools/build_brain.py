@@ -3,12 +3,16 @@
 A VEXcode EXP Python project is one file, so this script joins
 config/settings.py and the modules in src/ into brain/clawbot.py.
 
-    python3 tools/build_brain.py          write brain/clawbot.py
-    python3 tools/build_brain.py --check  exit 1 if brain/clawbot.py is out of date
+    python3 tools/build_brain.py          write brain/clawbot.py and clawbot_compact.py
+    python3 tools/build_brain.py --check  exit 1 if either is out of date
+
+brain/clawbot_compact.py is the same program with the comments and
+docstrings taken out, in case the full file is too big for the Brain.
 
 The build refuses code that MicroPython 1.13 (Python 3.4 syntax, the version
 VEX lists for the EXP Brain) cannot run, and any import other than vex and
-math. Laptop only: this script never goes onto the Brain.
+math. It needs Python 3.9 or newer on the laptop. Laptop only: this script
+never goes onto the Brain.
 """
 
 import ast
@@ -19,6 +23,7 @@ import tokenize
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT = os.path.join(ROOT, "brain", "clawbot.py")
+COMPACT_OUTPUT = os.path.join(ROOT, "brain", "clawbot_compact.py")
 
 # Order matters: each part may only use names defined in the parts above it.
 PARTS = [
@@ -29,11 +34,13 @@ PARTS = [
     "src/robot.py",
     "src/distance.py",
     "src/colour.py",
+    "src/arm.py",
+    "src/mission.py",
     "src/bringup.py",
     "src/main.py",
 ]
 PROJECT_MODULES = {"settings", "geometry", "paths", "hardware", "robot", "distance",
-                   "colour", "bringup", "main"}
+                   "colour", "arm", "mission", "bringup", "main"}
 BRAIN_MODULES = ["vex", "math"]
 
 HEADER = """# clawbot.py
@@ -48,6 +55,14 @@ HEADER = """# clawbot.py
 # UNTESTED ON HARDWARE. This file has only been run in the simulator and
 # against a fake vex module. Work through docs/BRINGUP.md before trusting
 # it on a robot, and keep a hand near the Brain's stop buttons.
+"""
+
+
+COMPACT_HEADER = """# clawbot_compact.py
+#
+# GENERATED FILE - do not edit by hand. The same program as clawbot.py with
+# the comments and docstrings taken out, in case the full file is too big
+# for the Brain. Built by tools/build_brain.py. UNTESTED ON HARDWARE.
 """
 
 
@@ -184,22 +199,49 @@ def build():
     return text
 
 
+def compact(text):
+    """The Brain file without its comments, docstrings and blank lines."""
+    tree = ast.parse(text)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef)):
+            body = node.body
+            if (body and isinstance(body[0], ast.Expr)
+                    and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                body.pop(0)
+                if not body:
+                    body.append(ast.Pass())
+    out = COMPACT_HEADER + "\n" + ast.unparse(tree) + "\n"
+    problems = micropython_problems(out, COMPACT_OUTPUT)
+    if problems:
+        raise BuildError("compact file would not run on the EXP Brain:\n  " + "\n  ".join(problems))
+    compile(out, COMPACT_OUTPUT, "exec")
+    return out
+
+
 def main(argv):
     text = build()
+    outputs = [(OUTPUT, text), (COMPACT_OUTPUT, compact(text))]
     if "--check" in argv:
-        current = ""
-        if os.path.exists(OUTPUT):
-            with open(OUTPUT) as handle:
-                current = handle.read()
-        if current != text:
-            print("brain/clawbot.py is out of date. Run: python3 tools/build_brain.py")
+        stale = []
+        for path, wanted in outputs:
+            current = ""
+            if os.path.exists(path):
+                with open(path) as handle:
+                    current = handle.read()
+            if current != wanted:
+                stale.append(os.path.relpath(path, ROOT))
+        if stale:
+            print("out of date: %s. Run: python3 tools/build_brain.py" % ", ".join(stale))
             return 1
-        print("brain/clawbot.py is up to date.")
+        print("brain files are up to date.")
         return 0
     os.makedirs(os.path.dirname(OUTPUT), exist_ok=True)
-    with open(OUTPUT, "w") as handle:
-        handle.write(text)
-    print("wrote %s (%d lines)" % (os.path.relpath(OUTPUT, ROOT), text.count("\n")))
+    for path, wanted in outputs:
+        with open(path, "w") as handle:
+            handle.write(wanted)
+        print("wrote %s (%d lines, %d bytes)"
+              % (os.path.relpath(path, ROOT), wanted.count("\n"), len(wanted)))
     return 0
 
 

@@ -15,12 +15,17 @@ from colour import classify, load_colour_calibration, vote
 def sensor_check(robot):
     """Show live sensor readings until a stop button or the timeout.
 
-    The screen shows the heading, the filtered distance (IN when an object
-    is in range), the raw hue and brightness, and the colour the rule in
-    colour.py gives for the last COLOUR_READS readings.
+    The screen shows the arm and claw positions, the heading, the filtered
+    distance (IN when an object is in range), the raw hue and brightness,
+    and the colour the rule in colour.py gives for the last COLOUR_READS
+    readings. Start with the arm all the way down and the claw wide open:
+    those positions read 0, so moving them by hand shows the values for the
+    ARM_* and CLAW_* settings.
     Returns "timeout". A stop button raises StopRequested as usual.
     """
     hw = robot.hw
+    hw.reset_arm_degrees()
+    hw.reset_claw_degrees()
     references, gate, source = load_colour_calibration(hw)
     hw.log("sensor check: colour references from " + source)
     hw.optical_light(OPTICAL_LIGHT_PCT)
@@ -41,7 +46,7 @@ def sensor_check(robot):
         labels.append(classify(hue, brightness, references, gate))
         if len(labels) > COLOUR_READS:
             labels.pop(0)
-        robot.set_lines(["SENSORS L/R=stop",
+        robot.set_lines(["Arm %.0f Claw %.0f" % (hw.arm_degrees(), hw.claw_degrees()),
                          "Head %.1f" % hw.heading(),
                          distance_text,
                          "Hue %.0f Br %.0f" % (hue, brightness),

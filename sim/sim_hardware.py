@@ -11,8 +11,10 @@
 #   - the gyro has a slow drift and a little noise
 #   - the Distance Sensor is a single ray from the front of the robot; it
 #     can be made to miss readings or give wild ones, to test the filter
-#   - the Optical Sensor sees the colour of whatever ball the test says is
-#     held in the claw, with some noise
+#   - the Optical Sensor sees the colour of a ball in the claw, or of one
+#     right at the claw's palm, with some noise
+#   - closing the claw on a ball in its opening grips it; opening the claw
+#     lets it go, into a box if the arm is high and the ball is over one
 #   - boxes, balls and extra obstacles are solid; driving into them stalls
 #     the wheels, which is how a real bump looks to the encoders
 #
@@ -42,6 +44,21 @@ SIM_HUE_NOISE_DEG = 4.0
 SIM_BRIGHTNESS_NOISE_PCT = 2.0
 SIM_LIGHT_REFERENCE_PCT = 50.0  # LED power the brightness values here are for
 DEFAULT_MAX_TIME_MS = 600000.0  # a run longer than this is treated as stuck
+SIM_CLAW_BALL_DEG = 60.0        # where the claw stops when it closes on a ball
+SIM_MOUTH_HALF_MM = 60.0        # a ball centre this near the claw's centre line can be gripped
+SIM_OPTICAL_RANGE_MM = 10.0     # the Optical Sensor sees a ball this close to the palm
+SIM_ARM_CLEARS_SENSOR_DEG = 100.0  # above this a held ball is out of the Distance Sensor's view
+SIM_ARM_ABOVE_BOX_DEG = 300.0   # above this the claw passes over the top of a box
+SIM_CLAW_RELEASE_DEG = 30.0     # opening the claw past this lets the ball go
+
+# One ball of each colour and one that was never calibrated, placed on the
+# west and north sides of "sort_loop" as its comment in settings.py says.
+DEMO_BALLS = [
+    {"x": 0.0, "y": 300.0, "colour": "red"},
+    {"x": 0.0, "y": 600.0, "colour": "orange"},
+    {"x": 0.0, "y": 900.0, "colour": "blue"},
+    {"x": 450.0, "y": 1350.0, "colour": "green"},
+]
 
 # How a ball held in the claw looks to the Optical Sensor in the simulator,
 # as (hue, brightness). These are guesses for the model, not measurements.
@@ -82,14 +99,15 @@ class SimMotor:
 
 
 # ------------------------------------------------------------------ shapes
-def robot_outline(x, y, heading):
-    """Corners of the robot's rectangle in world coordinates."""
+def robot_outline(x, y, heading, front=FRONT_MM):
+    """Corners of the robot's rectangle in world coordinates, from the back
+    of the robot to front mm ahead of the turning centre."""
     rad = math.radians(heading)
     fx, fy = math.sin(rad), math.cos(rad)
     rx, ry = fy, -fx
     half = ROBOT_WIDTH_MM / 2.0
     corners = []
-    for along, side in ((FRONT_MM, half), (FRONT_MM, -half), (-REAR_MM, -half), (-REAR_MM, half)):
+    for along, side in ((front, half), (front, -half), (-REAR_MM, -half), (-REAR_MM, half)):
         corners.append((x + along * fx + side * rx, y + along * fy + side * ry))
     return corners
 
@@ -186,16 +204,26 @@ class SimHardware:
                  check_presses=(3000.0,), stop_press_ms=None, imu_calibrates=True,
                  obstacles=None, balls=None, include_boxes=True, held=None,
                  sd_card=True, sd_files=None, distance_dropout=0.0, distance_spike=0.0,
+                 events=None, arm_start_deg=0.0, claw_start_deg=0.0, arm_stops=True,
                  max_time_ms=DEFAULT_MAX_TIME_MS):
         """Options:
 
         check_presses  times in ms at which CHECK is pressed (or one time, or None)
-        held           colour of the ball in the claw: None, a name from
-                       SIM_BALL_LOOKS, or a list of (from_ms, name or None)
+        balls          balls on the floor: dicts with x, y and colour, and
+                       optionally grabbable=False (it slips out of the claw)
+                       or sticky=True (it will not drop out)
+        held           colour the Optical Sensor sees as if a ball were held:
+                       None, a name from SIM_BALL_LOOKS, or a list of
+                       (from_ms, name or None)
         sd_card        whether an SD card is inserted; sd_files preloads it
         distance_dropout, distance_spike
                        chance per reading that the Distance Sensor sees
                        nothing, or gives a random wrong distance
+        events         list of (time_ms, function(hw)) to run at those times
+        arm_start_deg, claw_start_deg
+                       where the arm and claw start, from their stops
+        arm_stops      False makes the arm's lower stop disappear, so homing
+                       never finds it
         """
         self.rng = random.Random(seed)
         if start is None:
@@ -225,12 +253,22 @@ class SimHardware:
             for cx, cy in list(BOX_POSITIONS.values()) + [REJECT_POSITION]:
                 self.obstacles.append(rectangle(cx, cy, BOX_SIZE_MM, BOX_SIZE_MM))
         self.balls = [dict(b) for b in (balls or [])]
+        self.box_spots = []
+        if include_boxes:
+            self.box_spots = list(BOX_POSITIONS.items()) + [("reject", REJECT_POSITION)]
+        self.box_contents = dict((name, []) for name, spot in self.box_spots)
+        self.dropped = []
+        self.held_ball = None
+        self.events = sorted(events or [], key=lambda event: event[0])
+        self.arm_stops = arm_stops
 
         self.t_ms = 0.0
         self.left = SimMotor()
         self.right = SimMotor()
         self.arm = SimMotor()
         self.claw = SimMotor()
+        self.arm.degrees = float(arm_start_deg)
+        self.claw.degrees = float(claw_start_deg)
         self.imu_offset = 0.0
         self.calibration_ends_ms = None
         self.light_pct = 0.0
@@ -253,21 +291,95 @@ class SimHardware:
                 * WHEEL_TRAVEL_MM * DRIVE_GEAR_RATIO * slip)
 
     def _hits_something(self, x, y, heading):
-        outline = robot_outline(x, y, heading)
+        # with the arm up, the claw passes over the boxes and only the
+        # chassis can hit them
+        if self.arm.degrees >= SIM_ARM_ABOVE_BOX_DEG:
+            body = robot_outline(x, y, heading, CHASSIS_FRONT_MM)
+        else:
+            body = robot_outline(x, y, heading)
         for rect in self.obstacles:
-            if _polygons_overlap(outline, _rect_polygon(rect)):
+            if _polygons_overlap(body, _rect_polygon(rect)):
                 return True
+        # a ball can go into the claw's opening, as far back as the palm
+        chassis = robot_outline(x, y, heading, CLAW_PALM_MM)
         for ball in self.balls:
-            if _circle_hits_polygon(ball["x"], ball["y"], BALL_DIAMETER_MM / 2.0, outline):
+            if _circle_hits_polygon(ball["x"], ball["y"], BALL_DIAMETER_MM / 2.0, chassis):
                 return True
         return False
+
+    def _robot_frame(self, px, py):
+        """(ahead, to the right) of a point, in mm from the turning centre."""
+        rad = math.radians(self.theta)
+        fx, fy = math.sin(rad), math.cos(rad)
+        dx, dy = px - self.x, py - self.y
+        return dx * fx + dy * fy, dx * fy - dy * fx
+
+    def _ball_in_mouth(self):
+        for ball in self.balls:
+            ahead, side = self._robot_frame(ball["x"], ball["y"])
+            if CLAW_PALM_MM <= ahead <= FRONT_MM and abs(side) <= SIM_MOUTH_HALF_MM:
+                return ball
+        return None
+
+    def _ball_at_palm(self):
+        if self.arm.degrees >= SIM_ARM_CLEARS_SENSOR_DEG:
+            return None    # the claw is up off the floor
+        radius = BALL_DIAMETER_MM / 2.0
+        for ball in self.balls:
+            ahead, side = self._robot_frame(ball["x"], ball["y"])
+            gap = ahead - radius - CLAW_PALM_MM
+            if -1.0 <= gap <= SIM_OPTICAL_RANGE_MM and abs(side) <= SIM_MOUTH_HALF_MM:
+                return ball
+        return None
+
+    def _update_grip(self, claw_before):
+        if self.held_ball is None:
+            # the claw has just closed as far as a ball's width
+            if claw_before < SIM_CLAW_BALL_DEG <= self.claw.degrees:
+                ball = self._ball_in_mouth()
+                if ball is not None and ball.get("grabbable", True):
+                    self.balls.remove(ball)
+                    self.held_ball = ball
+                    self.claw.degrees = SIM_CLAW_BALL_DEG
+                    self.claw.velocity = 0.0
+        elif self.claw.degrees < SIM_CLAW_RELEASE_DEG and not self.held_ball.get("sticky", False):
+            self._drop_held_ball()
+
+    def _drop_held_ball(self):
+        ball = self.held_ball
+        self.held_ball = None
+        radius = BALL_DIAMETER_MM / 2.0
+        high = self.arm.degrees >= SIM_ARM_ABOVE_BOX_DEG
+        if high:
+            reach = DROP_REACH_MM
+        else:
+            reach = CLAW_PALM_MM + radius
+        rad = math.radians(self.theta)
+        bx = self.x + reach * math.sin(rad)
+        by = self.y + reach * math.cos(rad)
+        if high:
+            half = BOX_SIZE_MM / 2.0
+            for name, (cx, cy) in self.box_spots:
+                if abs(bx - cx) <= half - radius and abs(by - cy) <= half - radius:
+                    self.box_contents[name].append(ball["colour"])
+                    return
+        ball = dict(ball)
+        ball["x"] = bx
+        ball["y"] = by
+        self.balls.append(ball)
+        self.dropped.append(ball)
 
     def _step(self, dt_ms):
         dt_s = dt_ms / 1000.0
         for motor in (self.left, self.right):
             motor.step(dt_s)
-        self.arm.step(dt_s, 0.0, SIM_ARM_MAX_DEG)
-        self.claw.step(dt_s, 0.0, SIM_CLAW_MAX_DEG)
+        self.arm.step(dt_s, 0.0 if self.arm_stops else None, SIM_ARM_MAX_DEG)
+        claw_before = self.claw.degrees
+        claw_shut = SIM_CLAW_MAX_DEG
+        if self.held_ball is not None:
+            claw_shut = SIM_CLAW_BALL_DEG
+        self.claw.step(dt_s, 0.0, claw_shut)
+        self._update_grip(claw_before)
 
         v_left = self._wheel_speed(self.left, self.slip_left)
         v_right = self._wheel_speed(self.right, self.slip_right)
@@ -289,6 +401,9 @@ class SimHardware:
         self.right.blocked = blocked
 
         self.t_ms += dt_ms
+        while self.events and self.events[0][0] <= self.t_ms:
+            when, action = self.events.pop(0)
+            action(self)
         if self.t_ms >= self._next_trace_ms:
             self.trace.append((self.t_ms, self.x, self.y, self._true_heading()))
             self._next_trace_ms += SIM_TRACE_PERIOD_MS
@@ -394,6 +509,10 @@ class SimHardware:
             hit = _ray_to_circle(ox, oy, dx, dy, ball["x"], ball["y"], BALL_DIAMETER_MM / 2.0)
             if hit is not None and (best is None or hit < best):
                 best = hit
+        if self.held_ball is not None and self.arm.degrees < SIM_ARM_CLEARS_SENSOR_DEG:
+            hit = CLAW_PALM_MM - SENSOR_OFFSET_MM
+            if best is None or hit < best:
+                best = hit
         if best is None or best > DISTANCE_MAX_MM:
             return None
         if self.sensor_noise_mm:
@@ -401,6 +520,8 @@ class SimHardware:
         return max(DISTANCE_MIN_MM, best)
 
     def _held_colour(self):
+        if self.held_ball is not None:
+            return self.held_ball["colour"]
         if self.held is None or isinstance(self.held, str):
             return self.held
         colour = None
@@ -411,6 +532,10 @@ class SimHardware:
 
     def _optical_reading(self):
         colour = self._held_colour()
+        if colour is None:
+            ball = self._ball_at_palm()
+            if ball is not None:
+                colour = ball["colour"]
         light = min(1.0, self.light_pct / SIM_LIGHT_REFERENCE_PCT)
         if colour is None:
             hue = None
@@ -432,7 +557,7 @@ class SimHardware:
         return self._optical_reading()[1]
 
     def optical_near(self):
-        return self._held_colour() is not None
+        return self._held_colour() is not None or self._ball_at_palm() is not None
 
     def optical_light(self, pct):
         self.light_pct = float(pct)

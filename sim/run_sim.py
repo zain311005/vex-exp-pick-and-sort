@@ -2,6 +2,8 @@
 
     python3 sim/run_sim.py                       drive SELECTED_PATH
     python3 sim/run_sim.py --path bringup_line   drive another path
+    python3 sim/run_sim.py --mode sort --demo-balls --plot
+                                                 sort four balls on SORT_PATH
     python3 sim/run_sim.py --slip-left 0.97      left wheel slips 3 percent
     python3 sim/run_sim.py --imu-drift 0.05      gyro drifts 0.05 degrees a second
     python3 sim/run_sim.py --plot                also save a picture in sim/out/
@@ -26,7 +28,7 @@ from settings import *                                  # noqa: E402,F403
 from geometry import distance_between, trace_segments, wrap_180  # noqa: E402
 from main import MODES, run                             # noqa: E402
 from paths import get_path, path_names                  # noqa: E402
-from sim_hardware import SimHardware, robot_outline     # noqa: E402
+from sim_hardware import DEMO_BALLS, SimHardware, robot_outline  # noqa: E402
 
 
 def planned_end(path_name):
@@ -41,13 +43,13 @@ def planned_end(path_name):
     return x, y, heading
 
 
-def save_plot(hw, path_name, filename):
+def save_plot(hw, path_name, filename, balls):
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from matplotlib.colors import is_color_like
-        from matplotlib.patches import Polygon, Rectangle
+        from matplotlib.patches import Circle, Polygon, Rectangle
     except ImportError:
         print("matplotlib is not installed, so no picture: pip install matplotlib")
         return
@@ -71,6 +73,14 @@ def save_plot(hw, path_name, filename):
         ax.text(cx, cy, name, ha="center", va="center", fontsize=8)
     for x0, y0, x1, y1 in hw.obstacles[len(spots):]:
         ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, facecolor="0.3", alpha=0.6))
+    radius = BALL_DIAMETER_MM / 2.0
+    for ball in balls:
+        colour = ball["colour"] if is_color_like(ball["colour"]) else "0.5"
+        ax.add_patch(Circle((ball["x"], ball["y"]), radius, facecolor=colour, alpha=0.3,
+                            edgecolor=colour, linestyle="--"))
+    for ball in hw.balls:
+        colour = ball["colour"] if is_color_like(ball["colour"]) else "0.5"
+        ax.add_patch(Circle((ball["x"], ball["y"]), radius, facecolor=colour, alpha=0.8))
 
     planned = [(START_X, START_Y)] + trace_segments(START_X, START_Y, START_HEADING,
                                                     get_path(path_name))
@@ -96,7 +106,10 @@ def save_plot(hw, path_name, filename):
 def main(argv):
     parser = argparse.ArgumentParser(description="Run the Clawbot program in the simulator.")
     parser.add_argument("--mode", choices=MODES, default="path")
-    parser.add_argument("--path", choices=path_names(), default=SELECTED_PATH)
+    parser.add_argument("--path", choices=path_names(), default=None,
+                        help="default: SORT_PATH for the sort, SELECTED_PATH otherwise")
+    parser.add_argument("--demo-balls", action="store_true",
+                        help="put one ball of each colour, and one odd one, on the sort loop")
     parser.add_argument("--slip-left", type=float, default=1.0,
                         help="fraction of encoder distance the left wheel really covers")
     parser.add_argument("--slip-right", type=float, default=1.0)
@@ -109,27 +122,36 @@ def main(argv):
     parser.add_argument("--plot", action="store_true", help="save a picture in sim/out/")
     args = parser.parse_args(argv)
 
+    balls = DEMO_BALLS if args.demo_balls else []
+    path_name = args.path
+    if path_name is None:
+        path_name = SORT_PATH if args.mode == "sort" else SELECTED_PATH
     hw = SimHardware(seed=args.seed, slip_left=args.slip_left, slip_right=args.slip_right,
                      imu_drift_dps=args.imu_drift, imu_noise_deg=args.imu_noise,
-                     stop_press_ms=args.stop_at, include_boxes=not args.no_boxes)
-    result = run(hw, args.mode, args.path)
+                     stop_press_ms=args.stop_at, include_boxes=not args.no_boxes,
+                     balls=balls)
+    result = run(hw, args.mode, path_name)
 
-    print("mode %s, path %s" % (args.mode, args.path))
+    print("mode %s, path %s" % (args.mode, path_name))
     print("result: %s after %.1f simulated seconds" % (result, hw.time_ms() / 1000.0))
     print("true end: x %.0f mm, y %.0f mm, heading %.1f" % (hw.x, hw.y, hw.theta % 360.0))
     if args.mode == "path":
-        px, py, ph = planned_end(args.path)
+        px, py, ph = planned_end(path_name)
         print("planned end: x %.0f mm, y %.0f mm, heading %.1f" % (px, py, ph))
         print("miss: %.0f mm, %.1f degrees" % (distance_between(hw.x, hw.y, px, py),
                                               wrap_180(hw.theta - ph)))
     print("collisions: %d" % hw.collisions)
+    if args.mode == "sort":
+        print("in the boxes: %s" % ", ".join("%s %s" % (name, contents)
+                                            for name, contents in hw.box_contents.items()))
+        print("balls left on the floor: %d" % len(hw.balls))
     print("Brain screen: %s" % " | ".join(hw.screen))
     for line in hw.console:
         print("console: %s" % line)
     print("Simulator result only. UNTESTED ON HARDWARE.")
     if args.plot:
-        name = args.path if args.mode == "path" else args.mode
-        save_plot(hw, args.path, os.path.join(HERE, "out", name + ".png"))
+        name = path_name if args.mode == "path" else args.mode
+        save_plot(hw, path_name, os.path.join(HERE, "out", name + ".png"), balls)
     return 0
 
 

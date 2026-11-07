@@ -33,8 +33,10 @@ What the status words mean:
 | `TRACK_WIDTH_MM` | 240 | MEASURE | Left wheel centre to right wheel centre. Only the simulator uses it |
 | `FRONT_MM`, `REAR_MM`, `ROBOT_WIDTH_MM` | 330, 80, 290 | MEASURE | Robot outline measured from the turning centre. Used for box clearance |
 | `SENSOR_OFFSET_MM` | 200 | MEASURE | Turning centre to the Distance Sensor face |
+| `CHASSIS_FRONT_MM` | 200 | MEASURE | Turning centre to the front of the chassis under the claw. Must stay out of a box at the drop point |
+| `CLAW_PALM_MM` | 230 | MEASURE | Turning centre to the back of the claw opening. Only the simulator uses it |
 | Turning centre | middle of the traction wheel axle | From VEX | The omni wheels at the claw end are not driven [1] |
-| Sensor mounting | Distance Sensor low at the front centre, Optical Sensor on the claw facing in | Chosen | Fixed properly in milestone 2 |
+| Sensor mounting | Distance Sensor low at the front centre, looking out through the open claw. Optical Sensor on the claw palm, facing into the claw | Chosen | With the arm down and nothing in front, the Distance Sensor must not see the claw (bring-up step 1a) |
 
 ## Field and boxes
 
@@ -45,8 +47,9 @@ What the status words mean:
 | `BALL_DIAMETER_MM` | 150 | Given | The balls are about 15 cm |
 | `BOX_SIZE_MM` | 254 | Given | The boxes are 10 in by 10 in |
 | `BOX_POSITIONS` | x 1550 mm, at y 1200, 600 and 0 | Chosen | Off the east edge. The original path uses almost the whole board |
-| `REJECT_POSITION` | x -600, y 600 | Chosen | Off the west edge |
-| `BOX_CLEARANCE_MM` | 100 | Chosen | A test checks the robot outline stays this far from every box on the original path. The closest point in the simulator is 143 mm |
+| `REJECT_POSITION` | x 450, y -650 | Chosen | Off the south edge, so its approach lane does not cross the sides where balls go |
+| `BOX_CLEARANCE_MM` | 100 | Chosen | A test checks the robot outline stays this far from every box on every path. The closest point in the simulator is 164 mm on the original path and 132 mm on `sort_loop` |
+| `SORT_PATH` | `sort_loop` | Chosen | A loop round the board with long, well separated sides. The original path's lines are only 150 to 300 mm apart, too close to leave balls beside them |
 | `START_X`, `START_Y`, `START_HEADING` | 0, -150, 0 | Given | The start of the assignment route |
 | `ORIGINAL_WAYPOINTS` | 14 points | Given | Copied exactly from the assignment program. A test compares them with the `submission-v1` tag |
 
@@ -73,7 +76,7 @@ What the status words mean:
 | Setting | Value | Status | Notes |
 |---|---|---|---|
 | `DISTANCE_WINDOW`, `DISTANCE_MIN_VALID` | 5, 3 | Chosen | The distance is the median of the last 5 readings, and needs at least 3 of them valid |
-| `OBJECT_RANGE_MM` | 400 | Chosen | What being "in range" sets off is decided in milestone 3 |
+| `OBJECT_RANGE_MM` | 400 | Chosen | While following the path, an object this near that lies on the board starts an approach |
 | `COLOUR_REFERENCES` | red 0 +-20, green 110 +-30, blue 220 +-20 | From VEX | Only a starting point. The calibration replaces them |
 | `COLOUR_GATE_BRIGHTNESS` | 10 | MEASURE | The calibration replaces it with a value halfway between the empty claw and the darkest ball |
 | `COLOUR_READS`, `COLOUR_MIN_VOTES` | 7, 5 | Chosen | A colour needs 5 of 7 readings to agree, otherwise the answer is "unknown" |
@@ -91,7 +94,28 @@ What the status words mean:
 | `DRIVE_KP`, `STEER_KP`, `TURN_KP`, `TURN_KD` | 0.3, 1.0, 0.8, 2.0 | Chosen | Only tried in the simulator. Expect to retune on the robot |
 | `START_DELAY_MS` | 1000 | Chosen | Same one-second pause as the assignment program |
 | Timeouts | see `settings.py` | Chosen | Every wait has one. A test fails if any is 0 or less |
+| `DRIVE_STALL_MM`, `DRIVE_STALL_MS` | 5, 500 | Chosen | A drive that moves less than 5 mm in half a second is pushing on something, so it stops |
 | `OPTICAL_LIGHT_PCT` | 50 | MEASURE | LED power for the colour readings, a whole number as the API asks. Calibrate again after changing it |
+
+## Arm, claw and sorting
+
+| Setting | Value | Status | Notes |
+|---|---|---|---|
+| Homing | arm down, claw open, onto their stops | Chosen | There are no limit switches, so the ends of travel are found by stalling at low power (15 %) |
+| `STALL_DEG`, `STALL_MS` | 3, 300 | Chosen | Turning less than 3 degrees in 300 ms counts as reaching a stop |
+| `ARM_SEARCH_DEG`, `ARM_GRAB_DEG` | 0, 0 | MEASURE | Claw down at ball height. Bring-up step 1b |
+| `ARM_CARRY_DEG` | 150 | MEASURE | High enough that the Distance Sensor no longer sees the held ball |
+| `ARM_DROP_DEG` | 400 | MEASURE | The bottom of the ball above the box rim |
+| `CLAW_EMPTY_CLOSED_DEG`, `CLAW_GRIP_MARGIN_DEG` | 120, 20 | MEASURE | A claw that stops 20 degrees short of fully shut, while the Optical Sensor sees something, is holding a ball |
+| `DROP_REACH_MM` | 310 | MEASURE | Turning centre to the held ball's centre with the arm up |
+| `DROP_INSET_MM` | 90 | Chosen | The ball's centre this far inside the box's near edge: 15 mm more than its radius |
+| `APPROACH_STOP_MM`, `CREEP_MAX_MM`, `IN_CLAW_READS` | 100, 150, 3 | Chosen | Drive up until the ball is 100 mm from the Distance Sensor, then creep until 3 bright readings in a row |
+| `OBSTACLE_STOP_MM` | 150 | Chosen | Anything this near that is not a ball to fetch stops the robot |
+| `IGNORE_RADIUS_MM` | 200 | Chosen | After giving up on an object, detections this near it are ignored |
+| `BOX_STAGING_MM` | 400 | Chosen | Line up this far from the drop point, and back out to it afterwards |
+| `UNKNOWN_COLOUR_ACTION` | `"reject"` | Chosen | Or `"stop"`, which the brief also allows |
+| `GRAB_TRIES`, `RELEASE_TRIES`, `NAV_TRIES` | 2, 2, 3 | Chosen | |
+| `MISSION_TIMEOUT_MS` | 15 minutes | Chosen | A whole sort in the simulator takes about 3 minutes |
 
 ## Simulator only
 
@@ -107,12 +131,18 @@ These describe the simulator's model, not the robot. They live in
 | Ball hues: red 3, green 118, blue 215, orange 32 degrees. White has no clear hue | Chosen | Guesses for the model, not measurements |
 | Empty-claw brightness 4 %, hue noise 4 degrees, brightness noise 2 % | Chosen | Guesses for the model |
 | Distance Sensor misses and wild readings | Chosen per test | Off by default. Tests turn them on to check the filter |
+| The claw stops at 60 degrees on a ball and shuts at 120 without one | Chosen | Model values |
+| A ball can be gripped if its centre is within 60 mm of the claw's centre line | Chosen | Model value |
+| The Optical Sensor sees a floor ball within 10 mm of the palm | Chosen | Model value |
+| The arm clears the Distance Sensor above 100 degrees and passes over a box above 300 | Chosen | Model values |
+| Balls never roll | Chosen | A real ball may roll away when the claw touches it. The grab retry is there for that, but the simulator never tests it |
 
 ## Open risks
 
-1. **Will a 15 cm ball fit in the claw?** Not checked. Before milestone 3,
-   open the claw fully and try a ball by hand. If it does not fit, the
-   pick-up step has to change (smaller balls, or a different grip).
+1. **Will a 15 cm ball fit in the claw?** Still not checked. Open the claw
+   fully and try a ball by hand before any sort. If it does not fit, the
+   pick-up has to change (smaller balls, or a different grip). The
+   simulator assumes it fits.
 2. **Dead reckoning drifts.** See the README. The robot cannot notice its
    own position error.
 3. **Gains tuned only in the simulator.** The real robot will behave
@@ -124,6 +154,14 @@ These describe the simulator's model, not the robot. They live in
 5. **Optical Sensor on the claw.** The LED may reflect off the claw itself.
    The empty-claw calibration step measures that, but only with the claw
    where it was during calibration.
+6. **Drops can miss without the robot knowing.** In the simulator a gyro
+   drift of about 1 degree a minute is enough for one of four balls to land
+   beside its box, while the robot counts it as sorted.
+7. **It only sees straight ahead.** A ball beside the path is not seen,
+   and one within about 22 cm of where the robot drives can be clipped,
+   including while it turns on the spot.
+8. **Geometry is guessed.** The arm angles, claw angles and reach are
+   placeholders until they are measured in bring-up step 1b.
 
 ## Links
 

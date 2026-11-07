@@ -76,10 +76,13 @@ def test_gyro_drift_makes_the_original_path_miss_the_start():
 
 
 # ------------------------------------------------------- failure paths
-def test_drive_into_a_wall_times_out_and_stops():
+def test_drive_into_a_wall_stops_as_stuck():
     wall = (-300.0, 400.0, 300.0, 460.0)
     hw = SimHardware(obstacles=[wall])
-    assert run(hw, "path", "original") == "timeout"
+    assert run(hw, "path", "original") == "stuck"
+    # it gave up within about DRIVE_STALL_MS of hitting the wall, not after
+    # the whole drive timeout
+    assert hw.time_ms() < 10000
     assert hw.collisions >= 1
     assert hw.y + FRONT_MM <= wall[1] + 1.0
     assert motors_stopped(hw)
