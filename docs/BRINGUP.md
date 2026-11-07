@@ -35,24 +35,72 @@ Each step changes `RUN_MODE` (and in step 3, `SELECTED_PATH`). Either:
 - [ ] Distance Sensor in port 5, low at the front centre, facing forward.
 - [ ] Optical Sensor in port 1, on the claw, facing into the claw.
 - [ ] Battery charged.
+- [ ] Optional: an SD card in the Brain, FAT32 and 32 GB or smaller, to
+      keep the colour calibration between runs.
 
 ## Step 1: sensors alone
 
-Setting: `RUN_MODE = "sensor_check"`. No motor moves in this mode.
+No motor moves in either part of this step.
+
+### 1a. Live readings
+
+Setting: `RUN_MODE = "sensor_check"`.
 
 1. Put the robot on the board and start the program. Keep it still while
    the screen says "Calibrating gyro".
-2. The screen then shows the heading, the Distance Sensor reading, and the
-   Optical Sensor hue and brightness.
+2. The screen then shows:
+   - `Head`: the gyro heading
+   - `Dist`: the filtered distance in mm, with `IN` instead of `mm` when
+     something is within `OBJECT_RANGE_MM` (400 mm), or `none`
+   - `Hue` and `Br`: the raw Optical Sensor hue and brightness
+   - `Colour`: the colour rule's answer for the last few readings:
+     a colour, `none` (nothing in the claw) or `unknown`
 
+- [ ] The program starts at all. `brain/clawbot.py` is a big file (about
+      48 KB). [VERIFY] If VEXcode or the Brain reports a size or memory
+      error, write down the exact message.
 - [ ] Turn the robot by hand about a quarter turn clockwise. The heading
       goes up by about 90.
-- [ ] Hold a hand about 300 mm in front of the Distance Sensor. The
-      reading is roughly 300 mm. Take the hand away and it says "none" or
-      a much bigger number.
-- [ ] Hold a ball against the claw. The Optical Sensor brightness goes up
-      and the hue changes with the ball's colour.
+- [ ] Hold a hand about 300 mm in front of the Distance Sensor. It shows
+      roughly `Dist 300 IN`. At about 600 mm it shows `Dist 600 mm`. Take
+      the hand away and it shows `none` or a much bigger number.
+- [ ] Put a ball in the claw. Brightness goes up and the hue changes with
+      the ball's colour. Until step 1b is done the colour comes from the
+      VEX default hue ranges, so it may be wrong.
+- [ ] With the claw empty, `Colour` shows `none`.
 - [ ] Press Left or Right. The screen shows STOPPED.
+
+### 1b. Colour calibration
+
+Setting: `RUN_MODE = "colour_calibrate"`. Have the red, green and blue
+balls ready. The room light should be the same as when the robot will sort.
+
+1. Start the program and keep the robot still for the gyro.
+2. The screen says `Claw empty`, `then press CHECK`. Check the claw is
+   empty, press CHECK and keep still for about a second while it reads.
+3. It then asks for each ball in turn (`red in claw` and so on). Put the
+   ball where it sits when the claw holds it, press CHECK, keep it still.
+4. The last screen shows `Saved to SD` (or `No SD: console`), then each
+   colour's reference hue and tolerance, then the brightness gate.
+
+- [ ] Every colour shows a hue, and the screen does not say `CLOSE!`.
+      `CLOSE!` means two colours look alike to the sensor: check the
+      lighting and the balls.
+- [ ] If it says `CALIBRATE FAILED` and `red too dark` (or another
+      colour), that ball was not in front of the sensor, or the LED is off.
+- [ ] Run 1a again. Each ball now shows its colour, and the empty claw
+      shows `none`.
+- [ ] Keep the readings. They are in the VEXcode console as
+      `label,hue,brightness` lines, and in `colour_log.csv` on the SD card.
+      On a laptop, `python3 tools/fit_colours.py colour_log.csv` shows how
+      each reading would be classified. Copy the file into
+      `tests/data/recorded/` and the tests will check real data as well.
+
+Without an SD card the calibration is not kept. Paste the
+`COLOUR_REFERENCES` and `COLOUR_GATE_BRIGHTNESS` lines from the console
+into `config/settings.py` and rebuild instead. [VERIFY] What `loadfile`
+does when the file is missing is not documented. The program treats an
+error or an empty file as "no calibration" and uses `settings.py`.
 
 ## Step 2: motors with the wheels off the ground
 

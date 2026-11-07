@@ -27,10 +27,13 @@ PARTS = [
     "src/paths.py",
     "src/hardware.py",
     "src/robot.py",
+    "src/distance.py",
+    "src/colour.py",
     "src/bringup.py",
     "src/main.py",
 ]
-PROJECT_MODULES = {"settings", "geometry", "paths", "hardware", "robot", "bringup", "main"}
+PROJECT_MODULES = {"settings", "geometry", "paths", "hardware", "robot", "distance",
+                   "colour", "bringup", "main"}
 BRAIN_MODULES = ["vex", "math"]
 
 HEADER = """# clawbot.py

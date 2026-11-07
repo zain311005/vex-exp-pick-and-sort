@@ -100,9 +100,11 @@ SELECTED_PATH = "original"
 # What the program does once the gyro has calibrated. The first time the
 # code runs on a robot, go through the modes in the order docs/BRINGUP.md
 # gives:
-#   "sensor_check"  show live sensor readings; no motor ever moves
-#   "motor_check"   after CHECK, spin each motor slowly, one at a time
-#   "path"          after CHECK, drive SELECTED_PATH
+#   "sensor_check"      show live sensor readings; no motor ever moves
+#   "colour_calibrate"  record the Optical Sensor with the claw empty and
+#                       with each ball in turn, then save the colour references
+#   "motor_check"       after CHECK, spin each motor slowly, one at a time
+#   "path"              after CHECK, drive SELECTED_PATH
 RUN_MODE = "path"
 
 START_DELAY_MS = 1000     # pause after CHECK so your hand is clear of the robot
@@ -144,11 +146,45 @@ SENSOR_CHECK_TIMEOUT_MS = 300000  # the sensor check ends after 5 minutes
 
 
 # ---------------------------------------------------------------- Sensors
-# Distance Sensor range from the VEX EXP Python API page for the sensor.
+# Distance Sensor. object_distance() covers 20 mm to 2000 mm (VEX EXP Python
+# API, Distance Sensor page). A reading outside that range, or one taken while
+# the sensor says it sees nothing, is thrown away. src/distance.py explains
+# the median and the "in range" rule.
 DISTANCE_MIN_MM = 20.0
 DISTANCE_MAX_MM = 2000.0
+DISTANCE_SAMPLE_MS = 50   # VERIFY: take a new reading at most this often
+DISTANCE_WINDOW = 5       # the median uses the last this-many readings
+DISTANCE_MIN_VALID = 3    # valid readings the window needs before it counts
+OBJECT_RANGE_MM = 400.0   # an object at this distance or nearer is "in range"
 
-OPTICAL_LIGHT_PCT = 50.0  # MEASURE: brightness of the Optical Sensor's LED
+# Optical Sensor. src/colour.py explains the colour rule. hue() is 0 to 359
+# degrees and brightness() is a percent (VEX EXP Python API, Optical Sensor).
+OPTICAL_LIGHT_PCT = 50    # MEASURE: LED power, a whole number of percent
+COLOUR_READS = 7          # readings taken for one colour decision
+COLOUR_MIN_VOTES = 5      # how many of them must agree, or the answer is "unknown"
+COLOUR_READ_MS = 30       # gap between those readings
+
+# Reference hues used until you run the colour calibration, as
+# (hue, tolerance) in degrees. These starting values are the middles of the
+# hue ranges the Optical Sensor page gives for its own color() method:
+# red 340 to 20, green 80 to 140, blue 200 to 240.
+COLOUR_REFERENCES = {
+    "red": (0.0, 20.0),
+    "green": (110.0, 30.0),
+    "blue": (220.0, 20.0),
+}
+COLOUR_GATE_BRIGHTNESS = 10.0  # MEASURE: a reading darker than this means nothing is there
+
+# Colour calibration (RUN_MODE "colour_calibrate").
+COLOUR_CAL_SAMPLES = 20        # readings for the empty claw and for each colour
+COLOUR_CAL_MIN_GOOD = 15       # bright enough readings each colour needs
+COLOUR_CAL_READ_MS = 50        # gap between calibration readings
+COLOUR_MIN_BRIGHTNESS_GAP = 5.0  # a ball reading must beat the empty claw by this much
+COLOUR_SPREAD_FACTOR = 3.0     # tolerance = this many times the spread of the readings
+COLOUR_MIN_TOLERANCE_DEG = 8.0
+COLOUR_MAX_TOLERANCE_DEG = 30.0
+COLOUR_FILE = "colours.txt"          # the calibration, in the SD card's root folder
+COLOUR_LOG_FILE = "colour_log.csv"   # every calibration reading, for tools/fit_colours.py
 
 
 # ------------------------------------------------------------ Brain screen

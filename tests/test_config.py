@@ -4,6 +4,7 @@ import os
 
 import settings
 from settings import *
+from colour import overlaps
 from main import MODES
 from paths import path_names
 
@@ -41,6 +42,35 @@ def test_every_timeout_is_positive():
 def test_selected_mode_and_path_exist():
     assert RUN_MODE in MODES
     assert SELECTED_PATH in path_names()
+
+
+def test_colour_settings_make_sense():
+    assert sorted(COLOUR_REFERENCES) == sorted(COLOURS)
+    for hue, tolerance in COLOUR_REFERENCES.values():
+        assert 0 <= hue < 360
+        assert COLOUR_MIN_TOLERANCE_DEG <= tolerance <= COLOUR_MAX_TOLERANCE_DEG
+    assert overlaps(COLOUR_REFERENCES) == []
+    assert 0 <= COLOUR_GATE_BRIGHTNESS <= 100
+    # the Optical Sensor page asks for a whole number of percent
+    assert isinstance(OPTICAL_LIGHT_PCT, int) and 0 < OPTICAL_LIGHT_PCT <= 100
+    # a strict majority, so two answers can never both win the vote
+    assert COLOUR_READS / 2.0 < COLOUR_MIN_VOTES <= COLOUR_READS
+    assert COLOUR_CAL_MIN_GOOD <= COLOUR_CAL_SAMPLES
+    assert COLOUR_MIN_TOLERANCE_DEG < COLOUR_MAX_TOLERANCE_DEG
+
+
+def test_distance_settings_make_sense():
+    # most of the window must be valid, so one bad reading cannot set the median
+    assert DISTANCE_WINDOW / 2.0 < DISTANCE_MIN_VALID <= DISTANCE_WINDOW
+    assert DISTANCE_MIN_MM < OBJECT_RANGE_MM <= DISTANCE_MAX_MM
+    assert DISTANCE_SAMPLE_MS >= LOOP_MS
+
+
+def test_sd_card_files_are_in_the_root_folder_with_an_extension():
+    # the SD Card page: root folder only, and the name must include the extension
+    for name in (COLOUR_FILE, COLOUR_LOG_FILE):
+        assert "/" not in name and "\\" not in name
+        assert "." in name
 
 
 def test_every_colour_has_a_box():

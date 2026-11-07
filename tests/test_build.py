@@ -36,6 +36,20 @@ def test_brain_file_imports_only_vex_and_math():
     assert imported == {"vex", "math"}
 
 
+def test_brain_file_does_not_hide_the_vex_names_it_uses():
+    # everything ends up in one file after "from vex import *"
+    defined = set()
+    for node in ast.parse(brain_source()).body:
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            defined.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                for item in ast.walk(target):
+                    if isinstance(item, ast.Name):
+                        defined.add(item.id)
+    assert not defined & set(fake_vex.__all__)
+
+
 def test_brain_file_and_sources_use_only_python_3_4_syntax():
     assert build_brain.micropython_problems(brain_source()) == []
     for part in build_brain.PARTS:
@@ -93,6 +107,17 @@ def run_brain_file(monkeypatch, **script):
     return names
 
 
+def brain_names(monkeypatch, **script):
+    """Load brain/clawbot.py on the fake vex module without running main()."""
+    fake_vex.reset(**script)
+    monkeypatch.setitem(sys.modules, "vex", fake_vex)
+    names = {"__name__": "brain_without_main"}
+    source = brain_source()
+    assert source.endswith("\nmain()\n")
+    exec(compile(source[:-len("main()\n")], BRAIN_FILE, "exec"), names)
+    return names
+
+
 def screen():
     return [fake_vex.state.rows[row] for row in sorted(fake_vex.state.rows)]
 
@@ -145,15 +170,56 @@ def test_brain_file_gives_up_when_the_wheels_never_turn(monkeypatch, capsys):
     assert "path original timeout segment 1" in capsys.readouterr().out
 
 
+def calibration_view(now_ms):
+    """What the fake Optical Sensor sees during the four calibration steps."""
+    if now_ms < 5000:
+        return 120.0, 3.0      # claw empty
+    if now_ms < 8000:
+        return 5.0, 40.0       # red
+    if now_ms < 11000:
+        return 118.0, 35.0     # green
+    return 215.0, 28.0         # blue
+
+
+def test_brain_file_colour_calibration_saves_to_the_sd_card(monkeypatch, capsys):
+    names = brain_names(monkeypatch, check_press_ms=[3000, 6000, 9000, 12000],
+                        sd_inserted=True, optical_at=calibration_view)
+    assert names["run"](names["VexHardware"](), "colour_calibrate") == "done"
+    assert screen()[0] == "Saved to SD"
+    saved = fake_vex.state.sd_files[COLOUR_FILE].decode("utf-8")
+    references, gate = names["parse_calibration"](saved)
+    assert references["red"][0] == pytest.approx(5.0)
+    assert references["blue"][0] == pytest.approx(215.0)
+    assert 3.0 < gate < 28.0
+    assert "COLOUR_REFERENCES = {" in capsys.readouterr().out
+    log = fake_vex.state.sd_files[COLOUR_LOG_FILE].decode("utf-8")
+    assert log.startswith("label,hue,brightness\nempty,120.0,3.0\n")
+
+
+def test_brain_file_reads_the_calibration_back(monkeypatch, capsys):
+    text = "gate 15.5\nred 5.0 8.0\ngreen 118.0 8.0\nblue 215.0 8.0\n"
+    names = brain_names(monkeypatch, sd_inserted=True,
+                        sd_files={COLOUR_FILE: text.encode("utf-8")})
+    references, gate, source = names["load_colour_calibration"](names["VexHardware"]())
+    assert source == "SD card" and gate == pytest.approx(15.5)
+
+
+@pytest.mark.parametrize("mode, script, result, first_line", [
+    ("sensor_check", {"left_press_ms": 6000}, "stopped", "STOPPED"),
+    ("motor_check", {"check_press_ms": 3000}, "done", "MOTOR CHECK DONE"),
+    ("colour_calibrate", {"right_press_ms": 4000}, "stopped", "STOPPED"),
+])
+def test_brain_file_runs_every_mode(monkeypatch, mode, script, result, first_line):
+    names = brain_names(monkeypatch, **script)
+    assert names["run"](names["VexHardware"](), mode) == result
+    assert screen()[0] == first_line
+    assert all(motor.command == 0 for motor in motors())
+
+
 def test_every_vex_call_in_hardware_is_in_the_fake_api(monkeypatch):
     """Each self.<device>.<call> in hardware.py must exist on the fake vex
     objects, and fake_vex.py only has calls copied from the VEX API pages."""
-    fake_vex.reset()
-    monkeypatch.setitem(sys.modules, "vex", fake_vex)
-    names = {"__name__": "brain_without_main"}
-    source = brain_source()
-    assert source.endswith("\nmain()\n")
-    exec(compile(source[:-len("main()\n")], BRAIN_FILE, "exec"), names)
+    names = brain_names(monkeypatch)
     hw = names["VexHardware"]()
 
     with open(os.path.join(ROOT, "src", "hardware.py")) as handle:

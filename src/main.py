@@ -3,16 +3,17 @@
 # What runs when the program starts on the Brain. run() takes any hardware
 # object, so the simulator and the tests call it with SimHardware instead.
 #
-# Milestone 1: calibrate the gyro, then do RUN_MODE (see settings.py).
-# The pick-and-sort behaviour is added in milestone 3.
+# Calibrate the gyro, then do RUN_MODE (see settings.py). Milestone 2 added
+# the colour calibration. The pick-and-sort behaviour comes in milestone 3.
 
 from settings import *
 from hardware import VexHardware
 from robot import Robot, StopRequested
 from paths import get_path
+from colour import colour_calibrate
 from bringup import sensor_check, motor_check
 
-MODES = ["sensor_check", "motor_check", "path"]
+MODES = ["sensor_check", "colour_calibrate", "motor_check", "path"]
 
 
 def settings_problem(mode, path_name):
@@ -62,13 +63,15 @@ def run(hw, mode=RUN_MODE, path_name=SELECTED_PATH):
             return "calibration_timeout"
         if mode == "sensor_check":
             return sensor_check(robot)
+        if mode == "colour_calibrate":
+            return colour_calibrate(robot)
 
         if mode == "motor_check":
             hint = "Lift wheels!"
         else:
             hint = "Path " + path_name
         robot.set_lines(["Clawbot sorter", hint, "CHECK = start", "L/R = stop"])
-        if not robot.wait_for_start():
+        if not robot.wait_for_check(START_WAIT_TIMEOUT_MS):
             robot.set_lines(["Not started.", "Program ended."])
             return "no_start"
         robot.pause(START_DELAY_MS)

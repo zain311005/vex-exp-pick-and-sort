@@ -9,7 +9,10 @@
 #   - the two driven wheels set the speed and turn rate (differential drive)
 #   - wheel slip makes the real distance a little shorter than the encoders say
 #   - the gyro has a slow drift and a little noise
-#   - the Distance Sensor is a single ray from the front of the robot
+#   - the Distance Sensor is a single ray from the front of the robot; it
+#     can be made to miss readings or give wild ones, to test the filter
+#   - the Optical Sensor sees the colour of whatever ball the test says is
+#     held in the claw, with some noise
 #   - boxes, balls and extra obstacles are solid; driving into them stalls
 #     the wheels, which is how a real bump looks to the encoders
 #
@@ -34,8 +37,23 @@ SIM_ARM_MAX_DEG = 600.0         # arm motor travel limit, motor degrees
 SIM_CLAW_MAX_DEG = 120.0        # claw motor travel limit, motor degrees
 SIM_STALL_CURRENT_A = 1.2       # current drawn by a stalled 5.5 W motor (API max)
 SIM_FREE_CURRENT_A = 0.1
-SIM_NO_OBJECT_BRIGHTNESS = 2.0  # optical brightness with nothing in front
+SIM_EMPTY_BRIGHTNESS = 4.0      # optical brightness with the claw empty
+SIM_HUE_NOISE_DEG = 4.0
+SIM_BRIGHTNESS_NOISE_PCT = 2.0
+SIM_LIGHT_REFERENCE_PCT = 50.0  # LED power the brightness values here are for
 DEFAULT_MAX_TIME_MS = 600000.0  # a run longer than this is treated as stuck
+
+# How a ball held in the claw looks to the Optical Sensor in the simulator,
+# as (hue, brightness). These are guesses for the model, not measurements.
+# A hue of None means the ball has no clear hue (white), so each reading
+# gets a random one.
+SIM_BALL_LOOKS = {
+    "red": (3.0, 42.0),
+    "green": (118.0, 35.0),
+    "blue": (215.0, 28.0),
+    "orange": (32.0, 45.0),
+    "white": (None, 70.0),
+}
 
 
 class SimTimeout(Exception):
@@ -165,9 +183,20 @@ class SimHardware:
 
     def __init__(self, start=None, seed=1, slip_left=1.0, slip_right=1.0,
                  imu_drift_dps=0.0, imu_noise_deg=0.0, sensor_noise_mm=0.0,
-                 start_press_ms=3000.0, stop_press_ms=None, imu_calibrates=True,
-                 obstacles=None, balls=None, include_boxes=True,
+                 check_presses=(3000.0,), stop_press_ms=None, imu_calibrates=True,
+                 obstacles=None, balls=None, include_boxes=True, held=None,
+                 sd_card=True, sd_files=None, distance_dropout=0.0, distance_spike=0.0,
                  max_time_ms=DEFAULT_MAX_TIME_MS):
+        """Options:
+
+        check_presses  times in ms at which CHECK is pressed (or one time, or None)
+        held           colour of the ball in the claw: None, a name from
+                       SIM_BALL_LOOKS, or a list of (from_ms, name or None)
+        sd_card        whether an SD card is inserted; sd_files preloads it
+        distance_dropout, distance_spike
+                       chance per reading that the Distance Sensor sees
+                       nothing, or gives a random wrong distance
+        """
         self.rng = random.Random(seed)
         if start is None:
             start = (START_X, START_Y, START_HEADING)
@@ -177,8 +206,17 @@ class SimHardware:
         self.imu_drift_dps = imu_drift_dps
         self.imu_noise_deg = imu_noise_deg
         self.sensor_noise_mm = sensor_noise_mm
-        self.start_press_ms = start_press_ms
+        if check_presses is None:
+            check_presses = ()
+        elif isinstance(check_presses, (int, float)):
+            check_presses = (check_presses,)
+        self.check_presses = [float(t) for t in check_presses]
         self.stop_press_ms = stop_press_ms
+        self.held = held
+        self.sd_card = sd_card
+        self.sd_files = dict(sd_files or {})
+        self.distance_dropout = distance_dropout
+        self.distance_spike = distance_spike
         self.imu_calibrates = imu_calibrates
         self.max_time_ms = max_time_ms
 
@@ -341,6 +379,10 @@ class SimHardware:
                 self.y + SENSOR_OFFSET_MM * math.cos(rad), rad)
 
     def distance_raw(self):
+        if self.distance_dropout and self.rng.random() < self.distance_dropout:
+            return None
+        if self.distance_spike and self.rng.random() < self.distance_spike:
+            return self.rng.uniform(DISTANCE_MIN_MM, DISTANCE_MAX_MM)
         ox, oy, rad = self._sensor_origin()
         dx, dy = math.sin(rad), math.cos(rad)
         best = None
@@ -358,16 +400,39 @@ class SimHardware:
             best += self.rng.gauss(0.0, self.sensor_noise_mm)
         return max(DISTANCE_MIN_MM, best)
 
-    # STUB until milestone 2: the simulator has no ball colours yet, so the
-    # Optical Sensor always reports nothing in front of it.
+    def _held_colour(self):
+        if self.held is None or isinstance(self.held, str):
+            return self.held
+        colour = None
+        for from_ms, name in self.held:
+            if self.t_ms >= from_ms:
+                colour = name
+        return colour
+
+    def _optical_reading(self):
+        colour = self._held_colour()
+        light = min(1.0, self.light_pct / SIM_LIGHT_REFERENCE_PCT)
+        if colour is None:
+            hue = None
+            brightness = SIM_EMPTY_BRIGHTNESS * light
+        else:
+            hue, lit = SIM_BALL_LOOKS[colour]
+            brightness = SIM_EMPTY_BRIGHTNESS + (lit - SIM_EMPTY_BRIGHTNESS) * light
+        if hue is None:
+            hue = self.rng.uniform(0.0, 360.0)
+        else:
+            hue += self.rng.gauss(0.0, SIM_HUE_NOISE_DEG)
+        brightness += self.rng.gauss(0.0, SIM_BRIGHTNESS_NOISE_PCT)
+        return hue % 360.0, max(0.0, min(100.0, brightness))
+
     def optical_hue(self):
-        return 0.0
+        return self._optical_reading()[0]
 
     def optical_brightness(self):
-        return SIM_NO_OBJECT_BRIGHTNESS
+        return self._optical_reading()[1]
 
     def optical_near(self):
-        return False
+        return self._held_colour() is not None
 
     def optical_light(self, pct):
         self.light_pct = float(pct)
@@ -376,8 +441,11 @@ class SimHardware:
     def _pressed(self, press_ms):
         return press_ms is not None and press_ms <= self.t_ms < press_ms + SIM_BUTTON_HOLD_MS
 
-    def start_pressed(self):
-        return self._pressed(self.start_press_ms)
+    def check_pressed(self):
+        for press_ms in self.check_presses:
+            if self._pressed(press_ms):
+                return True
+        return False
 
     def stop_pressed(self):
         return self._pressed(self.stop_press_ms)
@@ -391,3 +459,15 @@ class SimHardware:
 
     def beep(self):
         self.beeps += 1
+
+    # ---- SD card (kept in memory)
+    def sd_load(self, name):
+        if not self.sd_card:
+            return None
+        return self.sd_files.get(name)
+
+    def sd_save(self, name, text):
+        if not self.sd_card:
+            return False
+        self.sd_files[name] = text
+        return True

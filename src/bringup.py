@@ -8,27 +8,44 @@
 #                 which way it turns while the wheels are off the ground
 
 from settings import *
+from distance import DistanceFilter
+from colour import classify, load_colour_calibration, vote
 
 
 def sensor_check(robot):
     """Show live sensor readings until a stop button or the timeout.
 
+    The screen shows the heading, the filtered distance (IN when an object
+    is in range), the raw hue and brightness, and the colour the rule in
+    colour.py gives for the last COLOUR_READS readings.
     Returns "timeout". A stop button raises StopRequested as usual.
     """
     hw = robot.hw
+    references, gate, source = load_colour_calibration(hw)
+    hw.log("sensor check: colour references from " + source)
     hw.optical_light(OPTICAL_LIGHT_PCT)
+    distance = DistanceFilter()
+    labels = []
     start = hw.time_ms()
     while hw.time_ms() - start < SENSOR_CHECK_TIMEOUT_MS:
-        distance = hw.distance_raw()
-        if distance is None:
+        distance.update(hw)
+        found = distance.distance()
+        if found is None:
             distance_text = "Dist none"
+        elif distance.in_range():
+            distance_text = "Dist %.0f IN" % found
         else:
-            distance_text = "Dist %.0f mm" % distance
-        robot.set_lines(["SENSOR CHECK",
+            distance_text = "Dist %.0f mm" % found
+        hue = hw.optical_hue()
+        brightness = hw.optical_brightness()
+        labels.append(classify(hue, brightness, references, gate))
+        if len(labels) > COLOUR_READS:
+            labels.pop(0)
+        robot.set_lines(["SENSORS L/R=stop",
                          "Head %.1f" % hw.heading(),
                          distance_text,
-                         "Hue %.0f Br %.0f" % (hw.optical_hue(), hw.optical_brightness()),
-                         "L/R = stop"], False)
+                         "Hue %.0f Br %.0f" % (hue, brightness),
+                         "Colour " + vote(labels)], False)
         robot.tick()
     hw.optical_light(0)
     robot.set_lines(["SENSOR CHECK", "Timed out.", "Program ended."])

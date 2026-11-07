@@ -98,17 +98,26 @@ class Robot:
             self.hw.sleep_ms(LOOP_MS)
         return True
 
-    def wait_for_start(self):
-        """Wait for CHECK. Returns False if nobody presses it in time."""
+    def wait_for_check(self, timeout_ms):
+        """Wait for a new press of CHECK. Returns False if none comes in time.
+
+        A press only counts after CHECK has been seen released, so one long
+        press (or the press that started the program) is never taken twice.
+        """
         start = self.hw.time_ms()
-        while not self.hw.start_pressed():
-            if self.hw.time_ms() - start > START_WAIT_TIMEOUT_MS:
-                return False
+        released = False
+        while True:
             if self.hw.stop_pressed():
                 self.hw.stop_all()
                 raise StopRequested()
+            pressing = self.hw.check_pressed()
+            if pressing and released:
+                return True
+            if not pressing:
+                released = True
+            if self.hw.time_ms() - start > timeout_ms:
+                return False
             self.hw.sleep_ms(LOOP_MS)
-        return True
 
     def stop_drive(self):
         """Stop the wheels and give the robot time to come to rest."""

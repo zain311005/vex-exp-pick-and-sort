@@ -127,15 +127,11 @@ class VexHardware:
         return self.optical.is_near_object()
 
     def optical_light(self, pct):
-        """LED on at pct percent, or off when pct is 0."""
-        if pct > 0:
-            self.optical.set_light(LEDStateType.ON)
-            self.optical.set_light_power(pct, PERCENT)
-        else:
-            self.optical.set_light(LEDStateType.OFF)
+        """LED power in whole percent. Above 0 turns it on, 0 turns it off."""
+        self.optical.set_light_power(int(pct), PERCENT)
 
     # ---- Brain buttons, screen and console
-    def start_pressed(self):
+    def check_pressed(self):
         return self.brain.buttonCheck.pressing()
 
     def stop_pressed(self):
@@ -154,3 +150,23 @@ class VexHardware:
 
     def beep(self):
         self.brain.play_sound(SoundType.TADA)
+
+    # ---- SD card (FAT32, files in the root folder only)
+    def sd_load(self, name):
+        """Text of a file on the SD card, or None if there is no card or file."""
+        if not self.brain.sdcard.is_inserted():
+            return None
+        try:
+            return self.brain.sdcard.loadfile(name).decode("utf-8")
+        except Exception:
+            return None
+
+    def sd_save(self, name, text):
+        """Write text to a file on the SD card. Returns True if it was written."""
+        if not self.brain.sdcard.is_inserted():
+            return False
+        try:
+            self.brain.sdcard.savefile(name, bytearray(text, "utf-8"))
+        except Exception:
+            return False
+        return True

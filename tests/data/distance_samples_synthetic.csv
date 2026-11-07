@@ -1,0 +1,53 @@
+# SYNTHETIC SAMPLE READINGS. These were not recorded from a real sensor.
+# Short runs of Distance Sensor readings written by hand to exercise the
+# filter in src/distance.py. Each line is scenario,reading in mm, and
+# "none" means the sensor said it saw nothing. Some values are outside the
+# sensor's 20 to 2000 mm range on purpose.
+scenario,reading
+steady,300.2
+steady,299.8
+steady,301.0
+steady,300.5
+steady,299.9
+one_spike,300
+one_spike,302
+one_spike,1800
+one_spike,301
+one_spike,299
+two_missed,350
+two_missed,none
+two_missed,351
+two_missed,none
+two_missed,349
+three_missed,350
+three_missed,none
+three_missed,none
+three_missed,none
+three_missed,352
+out_of_range,5
+out_of_range,2500
+out_of_range,0
+out_of_range,300
+out_of_range,301
+four_valid,310
+four_valid,none
+four_valid,320
+four_valid,330
+four_valid,340
+far,800
+far,805
+far,798
+far,801
+far,799
+at_the_limit,399
+at_the_limit,401
+at_the_limit,400
+at_the_limit,402
+at_the_limit,398
+approaching,600
+approaching,550
+approaching,500
+approaching,450
+approaching,400
+approaching,350
+approaching,300

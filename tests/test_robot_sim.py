@@ -1,7 +1,7 @@
 import pytest
 
 import bringup
-import robot as robot_module
+import main as main_module
 from settings import *
 from geometry import distance_between, wrap_180
 from main import run
@@ -107,8 +107,8 @@ def test_gyro_that_never_calibrates_ends_the_program():
 
 def test_program_ends_if_check_is_never_pressed(monkeypatch):
     # a shorter wait than the real two minutes keeps the test quick
-    monkeypatch.setattr(robot_module, "START_WAIT_TIMEOUT_MS", 5000)
-    hw = SimHardware(start_press_ms=None)
+    monkeypatch.setattr(main_module, "START_WAIT_TIMEOUT_MS", 5000)
+    hw = SimHardware(check_presses=None)
     assert run(hw, "path", "original") == "no_start"
     assert hw.left.degrees == 0 and hw.right.degrees == 0
 

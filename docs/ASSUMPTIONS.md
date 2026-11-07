@@ -57,11 +57,29 @@ What the status words mean:
 | The EXP Brain runs MicroPython 1.13, based on Python 3.4 | From VEX | MicroPython Libraries page [2]. The build script rejects newer syntax |
 | A VEXcode EXP Python project is a single file | VERIFY | The reason `tools/build_brain.py` joins everything into `brain/clawbot.py` |
 | Brain buttons a program can read: Check, Left, Right | From VEX | Brain buttons page [3] |
-| Distance Sensor range 20 to 2000 mm | From VEX | EXP Python Distance Sensor page [4] |
-| The gyro is built into the EXP Brain and needs no port | From VEX | EXP Python Inertial page [5] |
-| Optical Sensor LED: `set_light` and `set_light_power` | From VEX | EXP Python Optical Sensor page [6] |
+| Distance Sensor range 20 to 2000 mm | From VEX | Distance Sensor page [4] |
+| How often the Distance Sensor gives a new reading | VERIFY | Not on the API page. `DISTANCE_SAMPLE_MS` is 50 ms, a guess |
+| The gyro is built into the EXP Brain and needs no port | From VEX | Inertial page [5] |
+| Optical Sensor: `hue()` is 0 to 359, `brightness()` is a percent, `set_light_power()` takes whole percent and 0 turns the LED off | From VEX | Optical Sensor page [6] |
+| Optical Sensor `color()` hue ranges: red 340 to 20, green 80 to 140, blue 200 to 240 | From VEX | Optical Sensor page [6]. The default `COLOUR_REFERENCES` are the middles of these |
+| SD card: FAT32, 32 GB or smaller, files in the root folder, names with an extension, `savefile` and `loadfile` take and give a `bytearray` | From VEX | SD Card page [7] |
+| What `loadfile` does when the file is missing | VERIFY | Not on the page. The code treats an error or an empty file as "no calibration" |
 | The Brain screen fits five lines of about 16 characters | VERIFY | The assignment program's screen used five lines of up to 16 characters |
-| Motor, Distance, Screen and wait calls used in `src/hardware.py` | VERIFY | Checked on the EXP Python API pages during the audit. Exact page links get added in milestone 4 |
+| Motor calls in `src/hardware.py` | From VEX | Motor page [8] |
+| Screen and `wait` calls | VERIFY | Used as on the API pages during the audit. Links get added in milestone 4 |
+
+## Sensing
+
+| Setting | Value | Status | Notes |
+|---|---|---|---|
+| `DISTANCE_WINDOW`, `DISTANCE_MIN_VALID` | 5, 3 | Chosen | The distance is the median of the last 5 readings, and needs at least 3 of them valid |
+| `OBJECT_RANGE_MM` | 400 | Chosen | What being "in range" sets off is decided in milestone 3 |
+| `COLOUR_REFERENCES` | red 0 +-20, green 110 +-30, blue 220 +-20 | From VEX | Only a starting point. The calibration replaces them |
+| `COLOUR_GATE_BRIGHTNESS` | 10 | MEASURE | The calibration replaces it with a value halfway between the empty claw and the darkest ball |
+| `COLOUR_READS`, `COLOUR_MIN_VOTES` | 7, 5 | Chosen | A colour needs 5 of 7 readings to agree, otherwise the answer is "unknown" |
+| `COLOUR_SPREAD_FACTOR` and the tolerance limits | 3, 8 to 30 degrees | Chosen | Tolerance is 3 times the spread of the calibration hues, kept between 8 and 30 degrees |
+| `COLOUR_CAL_SAMPLES`, `COLOUR_CAL_MIN_GOOD` | 20, 15 | Chosen | 20 readings per step, and at least 15 bright enough for each ball |
+| Sample readings in `tests/data/` | | SYNTHETIC | The `*_synthetic.csv` files are made up, not recorded. Real logs go in `tests/data/recorded/` |
 
 ## Speeds and control
 
@@ -73,7 +91,7 @@ What the status words mean:
 | `DRIVE_KP`, `STEER_KP`, `TURN_KP`, `TURN_KD` | 0.3, 1.0, 0.8, 2.0 | Chosen | Only tried in the simulator. Expect to retune on the robot |
 | `START_DELAY_MS` | 1000 | Chosen | Same one-second pause as the assignment program |
 | Timeouts | see `settings.py` | Chosen | Every wait has one. A test fails if any is 0 or less |
-| `OPTICAL_LIGHT_PCT` | 50 | MEASURE | LED power for the colour readings. Settled in milestone 2 |
+| `OPTICAL_LIGHT_PCT` | 50 | MEASURE | LED power for the colour readings, a whole number as the API asks. Calibrate again after changing it |
 
 ## Simulator only
 
@@ -86,6 +104,9 @@ These describe the simulator's model, not the robot. They live in
 | Motor response lag: 60 ms | Chosen | A rough guess |
 | Gyro calibration: 2 s | Chosen | The real calibration time may differ. The program allows 5 s |
 | Wheel slip and gyro drift | Chosen per test | Off by default. Tests turn them on to show the drift |
+| Ball hues: red 3, green 118, blue 215, orange 32 degrees. White has no clear hue | Chosen | Guesses for the model, not measurements |
+| Empty-claw brightness 4 %, hue noise 4 degrees, brightness noise 2 % | Chosen | Guesses for the model |
+| Distance Sensor misses and wild readings | Chosen per test | Off by default. Tests turn them on to check the filter |
 
 ## Open risks
 
@@ -96,6 +117,13 @@ These describe the simulator's model, not the robot. They live in
    own position error.
 3. **Gains tuned only in the simulator.** The real robot will behave
    differently. The bring-up checklist says what to change first.
+4. **Colours that were not calibrated.** A ball of another colour can be
+   read as a calibrated colour if its hue is close enough. In the synthetic
+   samples, 3 of 14 single readings of a white ball looked blue. The vote
+   (5 of 7 must agree) caught it, but cannot rule it out.
+5. **Optical Sensor on the claw.** The LED may reflect off the claw itself.
+   The empty-claw calibration step measures that, but only with the claw
+   where it was during calibration.
 
 ## Links
 
@@ -104,8 +132,10 @@ These describe the simulator's model, not the robot. They live in
    (listed on <https://www.vexrobotics.com/exp/downloads/build-instructions>)
 2. MicroPython Libraries: <https://api.vex.com/exp/home/python/Micropython_libraries.html>
 3. Brain (buttons): <https://api.vex.com/exp/home/python/Sensing/Brain.html>
-4. Distance Sensor: VEX EXP Python API, Distance Sensor page (link checked in milestone 4)
+4. Distance Sensor: <https://api.vex.com/exp/home/python/Sensing/distance-sensor.html>
 5. Inertial: <https://api.vex.com/exp/home/python/Inertial.html>
 6. Optical Sensor: <https://api.vex.com/exp/home/python/Sensing/optical-sensor.html>
+7. SD Card: <https://api.vex.com/exp/home/python/SDcard.html>
+8. Motor: <https://api.vex.com/exp/home/python/Motion/motor_and_motor_group.html>
 
 The VEX documents are linked, not copied into this repository.

@@ -18,7 +18,7 @@ SMART_PORTS = 10        # the EXP Brain has Smart Ports 1 to 10
 
 __all__ = [
     "Brain", "Inertial", "Motor", "Distance", "Optical", "Ports", "GearSetting",
-    "SoundType", "LEDStateType", "wait", "MSEC", "SECONDS", "DEGREES", "PERCENT",
+    "SoundType", "wait", "MSEC", "SECONDS", "DEGREES", "PERCENT",
     "MM", "FORWARD", "REVERSE", "BRAKE", "HOLD", "COAST",
 ]
 
@@ -36,16 +36,24 @@ state = _State()
 
 
 def reset(check_press_ms=None, left_press_ms=None, right_press_ms=None,
-          calibration_ms=2000):
+          calibration_ms=2000, sd_inserted=False, sd_files=None, optical_at=None):
     """Start a new fake run. Press times are in fake ms; None = never.
 
+    check_press_ms may also be a list of press times.
     calibration_ms=None makes the gyro calibrate forever.
+    optical_at, if given, is called with the fake time in ms and returns the
+    (hue, brightness) the Optical Sensor sees then.
     """
     state.now_ms = 0.0
-    state.check_press_ms = check_press_ms
-    state.left_press_ms = left_press_ms
-    state.right_press_ms = right_press_ms
+    if check_press_ms is None or isinstance(check_press_ms, (int, float)):
+        check_press_ms = [check_press_ms]
+    state.check_press_ms = list(check_press_ms)
+    state.left_press_ms = [left_press_ms]
+    state.right_press_ms = [right_press_ms]
     state.calibration_ms = calibration_ms
+    state.sd_inserted = sd_inserted
+    state.sd_files = dict(sd_files or {})
+    state.optical_at = optical_at
     state.devices = {}
     state.rows = {}
     state.sounds = []
@@ -92,11 +100,6 @@ class SoundType:
     TADA = _Token("TADA")
 
 
-class LEDStateType:
-    ON = _Token("ON")
-    OFF = _Token("OFF")
-
-
 def _need(value, *allowed):
     if not any(value is choice for choice in allowed):
         raise ValueError("unexpected argument %r, expected one of %r" % (value, allowed))
@@ -124,8 +127,10 @@ class _Button:
         self.press_attr = press_attr
 
     def pressing(self):
-        press = getattr(state, self.press_attr)
-        return press is not None and press <= state.now_ms < press + BUTTON_HOLD_MS
+        for press in getattr(state, self.press_attr):
+            if press is not None and press <= state.now_ms < press + BUTTON_HOLD_MS:
+                return True
+        return False
 
 
 class _Timer:
@@ -148,12 +153,30 @@ class _Screen:
         state.rows[self.row] = str(text)
 
 
+class _SDCard:
+    """https://api.vex.com/exp/home/python/SDcard.html"""
+
+    def is_inserted(self):
+        return state.sd_inserted
+
+    def savefile(self, filename, buffer):
+        if not isinstance(buffer, bytearray):
+            raise TypeError("savefile takes a bytearray")
+        state.sd_files[filename] = bytes(buffer)
+        return len(buffer)
+
+    def loadfile(self, filename):
+        return bytearray(state.sd_files.get(filename, b""))
+
+
 class Brain:
-    """VEX EXP Python API: Brain (buttons), Screen and Sound pages"""
+    """Buttons: https://api.vex.com/exp/home/python/Sensing/Brain.html
+    (the Screen and Sound pages cover the rest)"""
 
     def __init__(self):
         self.screen = _Screen()
         self.timer = _Timer()
+        self.sdcard = _SDCard()
         self.buttonCheck = _Button("check_press_ms")
         self.buttonLeft = _Button("left_press_ms")
         self.buttonRight = _Button("right_press_ms")
@@ -165,7 +188,7 @@ class Brain:
 
 # --------------------------------------------------------------- Inertial
 class Inertial:
-    """VEX EXP Python API: Inertial page (the sensor built into the Brain)"""
+    """https://api.vex.com/exp/home/python/Inertial.html (built into the Brain)"""
 
     def __init__(self):
         self._heading = 0.0
@@ -192,7 +215,7 @@ class Inertial:
 
 # ------------------------------------------------------------------ Motor
 class Motor:
-    """VEX EXP Python API: Motor page"""
+    """https://api.vex.com/exp/home/python/Motion/motor_and_motor_group.html"""
 
     def __init__(self, port, gears, reverse):
         _register(self, port)
@@ -231,7 +254,7 @@ class Motor:
 
 # ---------------------------------------------------------------- sensors
 class Distance:
-    """VEX EXP Python API: Distance Sensor page"""
+    """https://api.vex.com/exp/home/python/Sensing/distance-sensor.html"""
 
     def __init__(self, port):
         _register(self, port)
@@ -245,28 +268,29 @@ class Distance:
 
 
 class Optical:
-    """VEX EXP Python API: Optical Sensor page"""
+    """https://api.vex.com/exp/home/python/Sensing/optical-sensor.html"""
 
     def __init__(self, port):
         _register(self, port)
-        self.light = LEDStateType.OFF
-        self.light_power = 0.0
+        self.light_power = 0
+
+    def _reading(self):
+        if state.optical_at is None:
+            return 0.0, 0.0
+        return state.optical_at(state.now_ms)
 
     def hue(self):
-        return 0.0
+        return float(self._reading()[0])
 
     def brightness(self):
-        return 0.0
+        return float(self._reading()[1])
 
     def is_near_object(self):
         return False
 
-    def set_light(self, led):
-        _need(led, LEDStateType.ON, LEDStateType.OFF)
-        self.light = led
-
     def set_light_power(self, value, units):
+        # the API page asks for a whole number of percent
         _need(units, PERCENT)
-        if not 0.0 <= value <= 100.0:
-            raise ValueError("light power %r is outside 0..100 percent" % value)
+        if not isinstance(value, int) or not 0 <= value <= 100:
+            raise ValueError("light power %r is not a whole number 0..100" % value)
         self.light_power = value
