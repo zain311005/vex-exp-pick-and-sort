@@ -352,8 +352,10 @@ that a 15 cm ball fits in the EXP claw. The arm and claw positions in
 
 ## Licence and credits
 
-There is no licence yet. One will be added before the repository is made
-public.
+This project's own code and docs are under the MIT licence: see
+[LICENSE](LICENSE). It does not cover anything of VEX's: their products,
+software (including the `vex` module), documents and trademarks stay
+theirs.
 
 - The EXP Clawbot design, its build instructions and the VEX EXP Python
   API are VEX Robotics' work. This project links to them
